@@ -1,0 +1,43 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --bg: #050608;
+  --header-bg: #0a0c12;
+  --sidebar-bg: #07090e;
+  --card-bg: #0d1117;
+  --ink: #cbd5e1; /* slate-300 */
+  --line: #1e293b; /* grid line */
+  --border: #1a1c23;
+  --f-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --f-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-sans);
+}
+
+.tech-grid {
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+.mission-control-panel {
+  background: var(--header-bg);
+  border: 1px solid #1e293b;
+  backdrop-filter: blur(8px);
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+}
+
+.custom-target-icon {
+  background: transparent !important;
+  border: none !important;
+}
+

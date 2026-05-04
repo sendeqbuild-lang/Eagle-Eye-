@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // Primary operator email check + admins collection check
+      return isSignedIn() && (
+        request.auth.token.email == "sendeqbuild@gmail.com" ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidTarget(data) {
+      return data.keys().hasAll(['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.lat is number &&
+             data.lng is number;
+    }
+
+    match /targets/{targetId} {
+      allow get: if isAdmin() || (isSignedIn() && request.auth.uid == targetId);
+      // Restrict listing to admins only
+      allow list: if isAdmin();
+      allow write: if (isSignedIn() && targetId == request.auth.uid && isValidTarget(request.resource.data)) || isAdmin();
+      
+      match /locations/{updateId} {
+        allow read: if isAdmin();
+        allow create: if (isSignedIn() && targetId == request.auth.uid) || isAdmin();
+      }
+    }
+
+    match /admins/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /_connection_test_/{docId} {
+      allow read: if true;
+    }
+  }
+}

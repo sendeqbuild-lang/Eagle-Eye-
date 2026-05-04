@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "LocationUpdate": {
+      "title": "Location Update",
+      "description": "A single point in time location for a target",
+      "type": "object",
+      "properties": {
+        "targetId": { "type": "string", "description": "Unique ID for the tracked device" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "altitude": { "type": "number" },
+        "speed": { "type": "number" },
+        "heading": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userAgent": { "type": "string" },
+        "ipAddress": { "type": "string", "description": "Captured on server side if possible, or client hint" }
+      },
+      "required": ["targetId", "latitude", "longitude", "timestamp"]
+    },
+    "TargetProfile": {
+      "title": "Target Profile",
+      "description": "Metadata about a tracked individual or device",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "offline", "terminated"] },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/targets/{targetId}": {
+      "schema": "TargetProfile",
+      "description": "Profiles of devices being tracked"
+    },
+    "/targets/{targetId}/locations/{updateId}": {
+      "schema": "LocationUpdate",
+      "description": "Historical path of coordinates for a specific target"
+    }
+  }
+}

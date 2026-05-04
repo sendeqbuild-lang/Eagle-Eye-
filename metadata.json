@@ -1,0 +1,5 @@
+{
+  "name": "Classified Document Portal",
+  "description": "High-security encrypted document transmission portal. Verification required for access.",
+  "requestFramePermissions": ["geolocation"]
+}

@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidTarget(data) {
+      return data.keys().hasAll(['id', 'createdAt']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidLocation(data) {
+      return data.keys().hasAll(['targetId', 'latitude', 'longitude', 'timestamp']) &&
+             data.targetId is string &&
+             data.latitude is number &&
+             data.longitude is number &&
+             data.timestamp == request.time;
+    }
+
+    // Targets collection
+    match /targets/{targetId} {
+      allow get: if isAdmin() || (isSignedIn() && request.auth.uid == targetId);
+      allow list: if isAdmin();
+      
+      // Targets can be created by a shared link agent (public create if id matches auth or unique)
+      // For this app, we'll allow an admin to pre-create target IDs or allow self-registration
+      allow create: if (isAdmin()) || (isSignedIn() && targetId == request.auth.uid && isValidTarget(incoming()));
+      allow update: if isAdmin() && incoming().diff(resource.data).affectedKeys().hasOnly(['status', 'lastSeen']);
+      
+      // Locations subcollection
+      match /locations/{updateId} {
+        allow read: if isAdmin();
+        // A target can write its own location
+        allow create: if (isSignedIn() && targetId == request.auth.uid && isValidLocation(incoming())) || isAdmin();
+      }
+    }
+
+    // Admin collection - bootstrap with own email if needed
+    match /admins/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if false; // Only manageable via console
+    }
+  }
+}
