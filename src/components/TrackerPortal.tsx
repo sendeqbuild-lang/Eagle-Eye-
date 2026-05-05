@@ -128,7 +128,7 @@ export const TrackerPortal: React.FC = () => {
           
           // Only update if it's been a few seconds or if it's the first time 
           // (or if accuracy is significantly better)
-          if (now - lastReportTime < MIN_INTERVAL && status === 'granted') {
+          if (now - lastReportTime < MIN_INTERVAL && status === 'granted' && accuracy > 50) {
              return;
           }
           
@@ -399,8 +399,9 @@ export const TrackerPortal: React.FC = () => {
                   <div className="h-4 w-3/4 bg-slate-800 rounded animate-pulse"></div>
                   <div className="h-4 w-full bg-slate-800 rounded animate-pulse opacity-60"></div>
                   <div className="h-4 w-1/2 bg-slate-800 rounded animate-pulse opacity-30"></div>
-                  <div className="py-2 text-center text-[10px] text-slate-500 animate-pulse uppercase tracking-widest">
-                    Unpacking Secure Layers...
+                  <div className="py-2 flex flex-col items-center gap-2">
+                    <span className="text-[10px] text-slate-500 animate-pulse uppercase tracking-widest">Unpacking Secure Layers...</span>
+                    <div className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 rounded text-[7px] text-blue-400 font-bold animate-pulse">PRECISION_LATCH: ACTIVE</div>
                   </div>
                 </div>
               </div>
