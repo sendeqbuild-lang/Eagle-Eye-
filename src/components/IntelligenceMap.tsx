@@ -168,6 +168,8 @@ export const IntelligenceMap: React.FC<IntelligenceMapProps> = ({ targets, selec
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-4 bg-emerald-500/40"></div>
           <div className="absolute left-0 top-1/2 -translate-y-1/2 h-px w-4 bg-emerald-500/40"></div>
           <div className="absolute right-0 top-1/2 -translate-y-1/2 h-px w-4 bg-emerald-500/40"></div>
+          {/* Radar Sweep */}
+          <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_0deg,transparent_270deg,rgba(16,185,129,0.1)_360deg)] animate-[spin_4s_linear_infinite]"></div>
         </div>
       </div>
 
