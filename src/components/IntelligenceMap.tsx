@@ -28,12 +28,13 @@ interface TargetLocation {
   lng: number;
   lastSeen: string;
   accuracy?: number;
-  history?: [number, number][];
+  history?: { lat: number, lng: number, time: string }[];
 }
 
 interface IntelligenceMapProps {
   targets: TargetLocation[];
   selectedTargetId?: string;
+  historyIndex?: number;
 }
 
 // Helper to center map and handle view changes
@@ -47,11 +48,20 @@ function MapControls({ center, zoom, is3D }: { center: [number, number], zoom: n
   return null;
 }
 
-export const IntelligenceMap: React.FC<IntelligenceMapProps> = ({ targets, selectedTargetId }) => {
+export const IntelligenceMap: React.FC<IntelligenceMapProps> = ({ targets, selectedTargetId, historyIndex = -1 }) => {
   const [zoomLevel, setZoomLevel] = useState(13);
   const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D');
+  
   const selectedTarget = targets.find(t => t.id === selectedTargetId);
-  const mapCenter: [number, number] = selectedTarget ? [selectedTarget.lat, selectedTarget.lng] : [9.012, 38.757];
+  
+  // Determine map center based on history playback or live position
+  const activePosition: [number, number] | null = selectedTarget?.history && historyIndex >= 0 && historyIndex < selectedTarget.history.length
+    ? [selectedTarget.history[historyIndex].lat, selectedTarget.history[historyIndex].lng]
+    : selectedTarget 
+      ? [selectedTarget.lat, selectedTarget.lng]
+      : null;
+
+  const mapCenter: [number, number] = activePosition || [9.012, 38.757];
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-[#020305]">
@@ -80,10 +90,29 @@ export const IntelligenceMap: React.FC<IntelligenceMapProps> = ({ targets, selec
             <React.Fragment key={target.id}>
               {target.history && target.history.length > 1 && (
                 <Polyline 
-                  positions={target.history} 
-                  pathOptions={{ color: '#ef4444', weight: 1, dashArray: '5, 5', opacity: 0.5 }} 
+                  positions={target.history.map(h => [h.lat, h.lng] as [number, number])} 
+                  pathOptions={{ color: '#3b82f6', weight: 2, dashArray: '8, 8', opacity: 0.4 }} 
                 />
               )}
+              
+              {/* If history playback is active for this target, show a ghost marker */}
+              {selectedTargetId === target.id && target.history && historyIndex >= 0 && historyIndex < target.history.length && (
+                <Marker 
+                  position={[target.history[historyIndex].lat, target.history[historyIndex].lng]}
+                  icon={L.divIcon({
+                    className: 'history-ghost-icon',
+                    html: `
+                      <div class="relative flex items-center justify-center">
+                        <div class="w-3 h-3 rounded-full bg-blue-500/80 border border-white/50 shadow-[0_0_10px_#3b82f6] animate-pulse"></div>
+                        <div class="absolute -top-4 text-[7px] text-blue-400 font-bold uppercase whitespace-nowrap bg-black/50 px-1">T-${new Date(target.history[historyIndex].time).toLocaleTimeString()}</div>
+                      </div>
+                    `,
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8],
+                  })}
+                />
+              )}
+
               <Marker 
                 position={[target.lat, target.lng]} 
                 icon={createTargetIcon('active', selectedTargetId === target.id)}
