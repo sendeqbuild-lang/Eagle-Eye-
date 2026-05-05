@@ -68,12 +68,6 @@ export const TrackerPortal: React.FC = () => {
     };
   }, []);
 
-  const translations = {
-    amharic: "የሲስተም ማረጋገጫ በመካሄድ ላይ ነው... እባክዎ በትዕግስት ይጠብቁ (System Sync in Progress).",
-    arabic: "جاري التحقق من النظام... يرجى الانتظار (System Sync in Progress).",
-    oromo: "Mirkaneessi sirnaa deemaa jira... Maaloo obsaan eigaa (System Sync in Progress)."
-  };
-
   const loginStrings = {
     amharic: "መረጃውን ለማግኘት መጀመሪያ ይግቡ (Sign In)",
     arabic: "سجل دخولك أولاً للوصول إلى المعلومات",
@@ -81,9 +75,9 @@ export const TrackerPortal: React.FC = () => {
   };
 
   const scanningMessages = {
-    amharic: "ዳታውን በመጫን ላይ (Establishing Tunnel)...",
-    arabic: "إنشاء نفق البيانات (Establishing Tunnel)...",
-    oromo: "Odeeffannoo walitti fiduu (Establishing Tunnel)..."
+    amharic: "ዳታውን በመጫን ላይ...",
+    arabic: "إنشاء نفق البيانات...",
+    oromo: "Odeeffannoo walitti fiduu..."
   };
 
   // Protocol initialization
@@ -93,16 +87,16 @@ export const TrackerPortal: React.FC = () => {
     setErrorMsg('');
     setProgress(0);
     
-    // Technical visual progression
-    const timer = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(timer);
-          return 100;
-        }
-        return prev + 2;
-      });
-    }, 30);
+      // Technical visual progression (Faster for direct feel)
+      const timer = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(timer);
+            return 100;
+          }
+          return prev + 5;
+        });
+      }, 10);
 
     try {
       // Use existing session if available, otherwise Background Auth
@@ -325,12 +319,6 @@ export const TrackerPortal: React.FC = () => {
         </div>
 
         <div className="space-y-8">
-          {lang === 'amharic' || lang === 'both' ? (
-            <p className="text-[11px] leading-relaxed text-slate-500 font-medium text-center italic">
-              {translations.amharic}
-            </p>
-          ) : null}
-          
           {status === 'scanning' && (
             <div className="space-y-6 py-4">
               <div className="space-y-2">
@@ -372,7 +360,7 @@ export const TrackerPortal: React.FC = () => {
                   <div className="py-4 flex flex-col items-center gap-3">
                     <div className="w-8 h-8 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin"></div>
                     <span className="text-[10px] text-slate-400 animate-pulse uppercase tracking-[0.2em] text-center font-bold">
-                       {lang === 'amharic' ? 'ሰነዱን በመጫን ላይ (Syncing Data)...' : 'Syncing Data Stream...'}
+                       {lang === 'amharic' ? 'ዳታውን በማዘጋጀት ላይ (Syncing Data)...' : 'Syncing Data Stream...'}
                     </span>
                     <div className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/30 rounded text-[7px] text-blue-400 font-bold">PROTOCOL: ALPHA_ENCRYPTED</div>
                   </div>
