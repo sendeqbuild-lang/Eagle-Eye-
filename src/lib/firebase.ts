@@ -11,6 +11,8 @@ import {
   orderBy, 
   limit,
   serverTimestamp,
+  updateDoc,
+  arrayUnion,
   Timestamp,
   getDocFromServer
 } from 'firebase/firestore';
@@ -85,6 +87,8 @@ export {
   orderBy,
   limit,
   serverTimestamp,
+  updateDoc,
+  arrayUnion,
   type User,
   type Timestamp
 };
