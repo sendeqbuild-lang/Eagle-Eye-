@@ -32,7 +32,7 @@ const NavIcon = ({ active, icon, label, onClick }: any) => (
   </button>
 );
 
-const TargetCard = ({ target, selected, onClick }: { target: TargetData, selected: boolean, onClick: () => void }) => (
+const TargetCard: React.FC<{ target: TargetData, selected: boolean, onClick: () => void }> = ({ target, selected, onClick }) => (
   <div 
     onClick={onClick}
     className={`group p-3 rounded-xl border cursor-pointer transition-all duration-300 ${selected ? 'bg-blue-600/10 border-blue-500/30' : 'bg-slate-900/30 border-slate-800/50 hover:bg-slate-900/60 hover:border-slate-700'}`}
@@ -340,12 +340,27 @@ export const AdminDashboard: React.FC = () => {
 
       // AUTOMATIC LIVE TRACKING: Jump to the latest transmitting signal
       if (targetList.length > 0) {
-        const latest = [...targetList].sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())[0];
+        const sorted = [...targetList].sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+        const latest = sorted[0];
         const isFresh = new Date().getTime() - new Date(latest.lastSeen).getTime() < 10000;
 
+        // 1. If nothing selected or a new fresh target appears, jump to it
         if (!selectedTargetId || (latest.id !== selectedTargetId && isFresh)) {
           setSelectedTargetId(latest.id);
           setHistoryIndex(latest.history ? latest.history.length - 1 : 0);
+        } else if (selectedTargetId) {
+          // 2. If the currently selected target got a new point, and we were ALREADY looking at the latest point, follow it
+          const current = targetList.find(t => t.id === selectedTargetId);
+          if (current && current.history) {
+             // Use a ref-like approach conceptually (actually we have targets in scope)
+             // If the history length grew and we were at the old last index, move to new last index
+             setHistoryIndex(prev => {
+                if (current.history && prev === current.history.length - 2) {
+                   return current.history.length - 1;
+                }
+                return prev;
+             });
+          }
         }
       }
     }, (error) => {
