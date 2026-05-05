@@ -383,11 +383,19 @@ export const AdminDashboard: React.FC = () => {
   }, [isAuthReady, isAdminAuthenticated]);
 
   const [targetLabel, setTargetLabel] = useState('');
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (isClient) {
+      setCustomBaseUrl(window.location.origin);
+    }
+  }, [isClient]);
 
   const deployLink = () => {
     const langParam = selectedLanguage === 'both' ? 'both' : selectedLanguage;
     const nameParam = targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : '';
-    const url = `${window.location.origin}/track?lang=${langParam}${nameParam}`;
+    const base = customBaseUrl || window.location.origin;
+    const url = `${base.replace(/\/$/, '')}/track?lang=${langParam}${nameParam}`;
     navigator.clipboard.writeText(url);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 3000);
@@ -643,15 +651,31 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   <div className="space-y-6">
-                    <div className="space-y-3">
-                      <label className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] px-1">Session Descriptor (Internal)</label>
-                      <input 
-                        type="text" 
-                        placeholder="e.g. Operation Falcon, Targeted Asset Name"
-                        value={targetLabel}
-                        onChange={(e) => setTargetLabel(e.target.value)}
-                        className="w-full bg-[#111] border border-slate-800 rounded-xl p-4 text-white placeholder-slate-700 outline-none focus:border-blue-500/50 transition-all font-mono"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <label className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] px-1">App Landing Domain (Base URL)</label>
+                        <div className="relative">
+                          <input 
+                            type="text" 
+                            placeholder="https://your-app.vercel.app"
+                            value={customBaseUrl}
+                            onChange={(e) => setCustomBaseUrl(e.target.value)}
+                            className="w-full bg-[#111] border border-slate-800 rounded-xl p-4 text-blue-400 font-mono text-xs placeholder-slate-700 outline-none focus:border-blue-500/50 transition-all"
+                          />
+                          <Globe className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-700 pointer-events-none" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <label className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] px-1">Session Descriptor (Internal)</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Operation Falcon, Targeted Asset Name"
+                          value={targetLabel}
+                          onChange={(e) => setTargetLabel(e.target.value)}
+                          className="w-full bg-[#111] border border-slate-800 rounded-xl p-4 text-white placeholder-slate-700 outline-none focus:border-blue-500/50 transition-all font-mono"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-4">
@@ -683,7 +707,7 @@ export const AdminDashboard: React.FC = () => {
                                <Shield className="w-3 h-3" /> Encrypted Link Generated
                             </div>
                             <div className="text-[11px] text-slate-300 break-all select-all font-bold">
-                               {`${window.location.origin}/track?lang=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : ''}`}
+                               {`${customBaseUrl.replace(/\/$/, '')}/track?lang=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : ''}`}
                             </div>
                          </div>
                        )}
