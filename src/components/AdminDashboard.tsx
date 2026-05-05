@@ -32,7 +32,14 @@ const NavIcon = ({ active, icon, label, onClick }: any) => (
   </button>
 );
 
-const TargetCard: React.FC<{ target: TargetData, selected: boolean, onClick: () => void }> = ({ target, selected, onClick }) => (
+interface TargetCardProps {
+  target: TargetData;
+  selected: boolean;
+  onClick: () => void;
+  key?: any;
+}
+
+const TargetCard = ({ target, selected, onClick }: TargetCardProps) => (
   <div 
     onClick={onClick}
     className={`group p-3 rounded-xl border cursor-pointer transition-all duration-300 ${selected ? 'bg-blue-600/10 border-blue-500/30' : 'bg-slate-900/30 border-slate-800/50 hover:bg-slate-900/60 hover:border-slate-700'}`}
@@ -662,13 +669,24 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="pt-4">
+                    <div className="pt-4 space-y-4">
                        <button 
                          onClick={deployLink}
-                         className={`w-full text-white font-black py-5 rounded-2xl transition-all shadow-xl shadow-emerald-900/20 uppercase tracking-widest flex items-center justify-center gap-3 ${copyStatus === 'copied' ? 'bg-emerald-600' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                         className={`w-full text-white font-black py-5 rounded-2xl transition-all shadow-xl shadow-emerald-900/20 uppercase tracking-widest flex items-center justify-center gap-3 ${copyStatus === 'copied' ? 'bg-emerald-600' : 'bg-emerald-700 hover:bg-emerald-600'}`}
                        >
-                         <Shield className="w-5 h-5" /> {copyStatus === 'copied' ? 'COPIED TO CLIPBOARD' : 'Generate Deployment Link'}
+                         <LinkIcon className="w-5 h-5" /> {copyStatus === 'copied' ? 'LINK COPIED' : 'Generate Real-Time Tracking Link'}
                        </button>
+
+                       {copyStatus === 'copied' && (
+                         <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-xl animate-in font-mono">
+                            <div className="text-[9px] text-emerald-500 font-black uppercase mb-1 flex items-center gap-2">
+                               <Shield className="w-3 h-3" /> Encrypted Link Generated
+                            </div>
+                            <div className="text-[11px] text-slate-300 break-all select-all font-bold">
+                               {`${window.location.origin}/track?lang=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : ''}`}
+                            </div>
+                         </div>
+                       )}
                     </div>
                   </div>
                </div>
