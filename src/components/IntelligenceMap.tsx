@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl, Polyline, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Minus, Box, Maximize, Target, Navigation } from 'lucide-react';
@@ -131,6 +131,20 @@ export const IntelligenceMap: React.FC<IntelligenceMapProps> = ({ targets, selec
                   </div>
                 </Popup>
               </Marker>
+
+              {target.accuracy && target.accuracy > 0 && (
+                <Circle 
+                  center={[target.lat, target.lng]}
+                  radius={target.accuracy}
+                  pathOptions={{ 
+                    color: selectedTargetId === target.id ? '#ef4444' : '#64748b', 
+                    fillColor: selectedTargetId === target.id ? '#ef4444' : '#64748b', 
+                    fillOpacity: 0.1, 
+                    weight: 1,
+                    dashArray: '5, 5'
+                  }}
+                />
+              )}
             </React.Fragment>
           ))}
         </AnimatePresence>
