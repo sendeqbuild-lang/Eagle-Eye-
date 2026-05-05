@@ -14,7 +14,7 @@ async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: "spa", // This should handle SPA fallback automatically
     });
     app.use(vite.middlewares);
   } else {
@@ -24,16 +24,6 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
-
-  // Fallback for all other routes to serve index.html (important for SPA)
-  app.get('*', (req, res, next) => {
-    // If it's an API route or static asset that wasn't found, let it 404
-    if (req.path.startsWith('/api') || req.path.includes('.')) {
-      return next();
-    }
-    // Otherwise serve index.html for SPA routing
-    res.sendFile(path.join(process.cwd(), 'index.html'));
-  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
