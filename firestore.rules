@@ -36,13 +36,14 @@ service cloud.firestore {
     // TARGETS COLLECTION
     // ---------------------------------------------------------
     function isValidTarget(data) {
-      let requiredFields = ['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status'];
+      let requiredFields = ['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status', 'platform'];
       return data.keys().hasAll(requiredFields) &&
              data.name is string && data.name.size() <= 100 &&
              data.lat is number &&
              data.lng is number &&
              data.accuracy is number &&
              data.lastSeen is string &&
+             data.platform is string &&
              data.status in ['active', 'offline', 'warning'];
     }
 
@@ -50,20 +51,14 @@ service cloud.firestore {
       allow get: if isAdmin() || (isSignedIn() && request.auth.uid == targetId);
       allow list: if isAdmin();
       
-      // Allow creation and updates even without auth to handle cases where Anonymous Auth is disabled
-      // This is a "stealth" collection by design
       allow create: if isValidId(targetId) && isValidTarget(incoming());
       
       allow update: if (isValidId(targetId) && (
-        // Admin can do anything
         isAdmin() ||
-        // Public/Self update (strict schema)
         (
           isValidTarget(incoming()) && (
-            // Action: Update Location/Status
-            incoming().diff(existing()).affectedKeys().hasOnly(['lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel']) ||
-            // Action: Append Intel (Harvesting)
-            incoming().diff(existing()).affectedKeys().hasOnly(['intel', 'lastSeen'])
+            // Added platform and history to the allowed update keys
+            incoming().diff(existing()).affectedKeys().hasOnly(['lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel', 'platform'])
           )
         )
       ));
