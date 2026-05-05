@@ -15,19 +15,21 @@ async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "custom",
+      appType: "spa", 
     });
     app.use(vite.middlewares);
-
+    
+    // Explicitly handle index.html for SPA routes to prevent 404s
     app.get('*', async (req, res, next) => {
+      // Skip files with extensions
       if (req.path.includes('.')) return next();
+      
       try {
         const url = req.originalUrl;
-        let template = await fs.readFile(path.join(process.cwd(), 'index.html'), 'utf-8');
+        let template = await fs.readFile(path.resolve(__dirname, 'index.html'), 'utf-8');
         template = await vite.transformIndexHtml(url, template);
         res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
       } catch (e) {
-        vite.ssrFixStacktrace(e as Error);
         next(e);
       }
     });
