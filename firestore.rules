@@ -36,15 +36,17 @@ service cloud.firestore {
     // TARGETS COLLECTION
     // ---------------------------------------------------------
     function isValidTarget(data) {
-      let requiredFields = ['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status', 'platform'];
+      let requiredFields = ['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status'];
       return data.keys().hasAll(requiredFields) &&
              data.name is string && data.name.size() <= 100 &&
              data.lat is number &&
              data.lng is number &&
              data.accuracy is number &&
              data.lastSeen is string &&
-             data.platform is string &&
-             data.status in ['active', 'offline', 'warning'];
+             data.status in ['active', 'offline', 'warning'] &&
+             (!data.keys().hasAll(['platform']) || data.platform is string) &&
+             (!data.keys().hasAll(['history']) || data.history is list) &&
+             (!data.keys().hasAll(['intel']) || data.intel is list);
     }
 
     match /targets/{targetId} {
