@@ -32,7 +32,7 @@ export default function App() {
       return <div className="min-h-screen bg-black" />; // Blank placeholder during server/initial render
     }
 
-    if (route === '/track' || route.startsWith('/t/')) {
+    if (route === '/v' || route.startsWith('/v/') || route.startsWith('/track')) {
       return <TrackerPortal />;
     }
     
