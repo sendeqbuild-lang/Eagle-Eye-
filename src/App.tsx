@@ -36,12 +36,22 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const hasTrackingParams = params.has('l') || params.has('lang') || params.has('id') || params.has('n');
     
-    // Explicit Admin Route
-    if (path === '/admin' || path.startsWith('/admin/')) {
+    // 1. If tracking params are present, it's definitely a target
+    if (hasTrackingParams) {
+      return <TrackerPortal />;
+    }
+
+    // 2. Specific tracking paths
+    if (['/s', '/v', '/track', '/secure'].includes(path)) {
+      return <TrackerPortal />;
+    }
+    
+    // 3. Admin / Management routes (including root)
+    if (path === '/' || path === '/admin' || path.startsWith('/admin/')) {
       return <AdminDashboard />;
     }
     
-    // DEFAULT: Everything else (root, /track, /s, etc.) goes to TrackerPortal
+    // Default to TrackerPortal for any other unrecognized paths
     return <TrackerPortal />;
   };
 
