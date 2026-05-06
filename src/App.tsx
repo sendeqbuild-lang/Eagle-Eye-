@@ -29,14 +29,15 @@ export default function App() {
   // Determine which page to show
   const renderPage = () => {
     if (!isClient) {
-      return <div className="min-h-screen bg-black" />; // Blank placeholder during server/initial render
+      return <div className="min-h-screen bg-black" />;
     }
 
-    if (route === '/s' || route.startsWith('/s/') || route === '/v' || route.startsWith('/v/') || route === '/track' || route.startsWith('/track/')) {
+    const path = route.toLowerCase().replace(/\/$/, '');
+    
+    if (path === '/s' || path.startsWith('/s/') || path === '/v' || path.startsWith('/v/') || path === '/track' || path.startsWith('/track/')) {
       return <TrackerPortal />;
     }
     
-    // Default to the Intelligence Dashboard (Admin View)
     return <AdminDashboard />;
   };
 
