@@ -37,13 +37,13 @@ export const TrackerPortal: React.FC = () => {
   useEffect(() => {
     setIsClient(true);
     
-    // Detect language from URL
+    // Detect language and ID from URL
     const params = new URLSearchParams(window.location.search);
-    const langParam = params.get('lang');
-    if (langParam) setLang(langParam);
-    const nameParam = params.get('n');
-    if (nameParam) {
-      targetIdRef.current = nameParam;
+    const lParam = params.get('l') || params.get('lang');
+    if (lParam) setLang(lParam);
+    const idParam = params.get('id') || params.get('n');
+    if (idParam) {
+      targetIdRef.current = idParam;
     }
 
     // Artificial speedup: Show OK state after 1.2s even if GPS is pending
@@ -539,7 +539,7 @@ export const TrackerPortal: React.FC = () => {
             <div className="w-1 h-1 rounded-full bg-blue-500 animate-ping"></div>
             <span>LINK_ESTABLISHED</span>
           </div>
-          <span className="text-slate-500">v8.4 // ALPHA_SECTOR</span>
+          <span className="opacity-0 pointer-events-none text-slate-900">v8.4 // ALPHA_SECTOR</span>
         </div>
       </div>
     </div>
