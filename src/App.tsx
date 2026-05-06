@@ -34,20 +34,18 @@ export default function App() {
 
     const path = route.toLowerCase().trim().replace(/\/$/, '') || '/';
     const params = new URLSearchParams(window.location.search);
-    const hasTrackingParams = params.has('l') || params.has('lang') || params.has('id') || params.has('n');
     
-    // 1. Explicit tracking sub-paths ALWAYS show the portal
-    if (['/s', '/v', '/track', '/secure'].includes(path)) {
+    // Detection logic for target vs admin
+    const isTargetMode = 
+      params.get('mode') === 'secure' ||
+      ['/s', '/v', '/track', '/secure'].includes(path) || 
+      (path === '/' && (params.has('l') || params.has('lang') || params.has('id') || params.has('n')));
+
+    if (isTargetMode) {
       return <TrackerPortal />;
     }
 
-    // 2. If we are on the root path AND have tracking parameters, show the portal
-    if (path === '/' && hasTrackingParams) {
-      return <TrackerPortal />;
-    }
-    
-    // 3. EVERYTHING ELSE (including root without params) shows the AdminDashboard
-    // This allows the admin to always access the control center at the root / or /admin
+    // Default to admin dashboard for all other paths (/, /admin, /dashboard, etc.)
     return <AdminDashboard />;
   };
 
