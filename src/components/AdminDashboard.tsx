@@ -462,8 +462,8 @@ export const AdminDashboard: React.FC = () => {
     const langParam = selectedLanguage === 'both' ? 'both' : selectedLanguage;
     const nameParam = targetLabel ? `&id=${encodeURIComponent(targetLabel)}` : '';
     const base = customBaseUrl || window.location.origin;
-    // Generate a discrete "secure share" style URL
-    const url = `${base.replace(/\/$/, '')}/s?l=${langParam}${nameParam}`;
+    // Use parameter-based routing to ensure maximum compatibility with different servers/proxies
+    const url = `${base.replace(/\/$/, '')}/?mode=secure&l=${langParam}${nameParam}`;
     navigator.clipboard.writeText(url);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 3000);
@@ -794,7 +794,7 @@ export const AdminDashboard: React.FC = () => {
                                <Shield className="w-3 h-3" /> Encrypted Link Generated
                             </div>
                             <div className="text-[11px] text-slate-300 break-all select-all font-bold">
-                               {`${customBaseUrl.replace(/\/$/, '')}/s?l=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&id=${encodeURIComponent(targetLabel)}` : ''}`}
+                               {`${customBaseUrl.replace(/\/$/, '')}/?mode=secure&l=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&id=${encodeURIComponent(targetLabel)}` : ''}`}
                             </div>
                          </div>
                        )}
