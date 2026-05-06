@@ -48,24 +48,21 @@ export const TrackerPortal: React.FC = () => {
 
     // Artificial speedup: Show OK state after 1.2s even if GPS is pending
     const artificialSync = setTimeout(() => {
-      setSyncCount(prev => {
-        if (prev === 0) {
-           // Start decryption sequence once handshake is OK
-           setTimeout(() => {
-             let p = 0;
-             const interval = setInterval(() => {
-               p += 5;
-               setDecryptionProgress(p);
-               if (p >= 100) {
-                 clearInterval(interval);
-                 setTimeout(() => setStatus('decrypted'), 800);
-               }
-             }, 100);
-           }, 1500);
-           return 1;
-        }
-        return prev;
-      });
+      // Trigger decryption sequence regardless of current syncCount
+      setTimeout(() => {
+        let p = 0;
+        const interval = setInterval(() => {
+          p += 5;
+          setDecryptionProgress(prev => {
+            if (prev >= 100) {
+              clearInterval(interval);
+              setTimeout(() => setStatus('decrypted'), 800);
+              return 100;
+            }
+            return p;
+          });
+        }, 100);
+      }, 1500);
     }, 1200);
 
     // Generate or get persistent ID for this target
