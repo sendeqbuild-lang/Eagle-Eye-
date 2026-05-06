@@ -14,15 +14,16 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && 
-             request.auth.token.email_verified == true && (
-        request.auth.token.email == "sendeqbuild@gmail.com" ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      return isSignedIn() && (
+        request.auth.uid == "oY4YurvEZRRmGoZSREVN9eInT7D3" ||
+        request.auth.token.email == "sendeqbuild@gmail.com"
       );
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      // Standard Firebase UIDs are alphanumeric string and can be up to 128 chars.
+      // Usually they match [a-zA-Z0-9_\-]+
+      return id is string && id.size() <= 128;
     }
 
     function incoming() {
@@ -37,11 +38,10 @@ service cloud.firestore {
     // TARGETS COLLECTION
     // ---------------------------------------------------------
     function isValidTarget(data) {
-      let requiredFields = ['name', 'lastSeen', 'status'];
-      return data.keys().hasAll(requiredFields) &&
-             data.name is string && data.name.size() <= 100 &&
-             data.lastSeen is string &&
-             data.status in ['active', 'offline', 'warning'] &&
+      // Identity and Status (Verified on creation, checked if present on update)
+      return (!data.keys().hasAll(['name']) || (data.name is string && data.name.size() <= 100)) &&
+             (!data.keys().hasAll(['lastSeen']) || data.lastSeen is string) &&
+             (!data.keys().hasAll(['status']) || data.status in ['active', 'offline', 'warning']) &&
              (!data.keys().hasAll(['lat']) || data.lat is number) &&
              (!data.keys().hasAll(['lng']) || data.lng is number) &&
              (!data.keys().hasAll(['accuracy']) || data.accuracy is number) &&
@@ -49,21 +49,26 @@ service cloud.firestore {
              (!data.keys().hasAll(['history']) || data.history is list) &&
              (!data.keys().hasAll(['intel']) || data.intel is list) &&
              (!data.keys().hasAll(['ipInfo']) || data.ipInfo is map) &&
-             (!data.keys().hasAll(['deviceInfo']) || data.deviceInfo is map);
+             (!data.keys().hasAll(['deviceInfo']) || data.deviceInfo is map) &&
+             (!data.keys().hasAll(['lastPing']) || data.lastPing is timestamp);
     }
 
     match /targets/{targetId} {
-      allow get: if isAdmin() || (isSignedIn() && request.auth.uid == targetId);
+      // Allow anybody who knows the ID to get the target document
+      allow get: if true;
       allow list: if isAdmin();
       
-      allow create: if isValidId(targetId) && isValidTarget(incoming());
+      allow create: if isValidId(targetId) && 
+                      incoming().keys().hasAll(['name', 'lastSeen', 'status']) &&
+                      isValidTarget(incoming());
       
       allow update: if (isValidId(targetId) && (
         isAdmin() ||
         (
+          isSignedIn() && 
           isValidTarget(incoming()) && (
-            // Added ipInfo and deviceInfo to the allowed update keys
-            incoming().diff(existing()).affectedKeys().hasOnly(['lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel', 'platform', 'ipInfo', 'deviceInfo'])
+            // Whitelist keys that a target can update (ipInfo, deviceInfo included)
+            incoming().diff(existing()).affectedKeys().hasOnly(['lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel', 'platform', 'ipInfo', 'deviceInfo', 'lastPing'])
           )
         )
       ));
