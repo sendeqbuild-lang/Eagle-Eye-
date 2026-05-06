@@ -69,7 +69,7 @@ service cloud.firestore {
           request.auth.uid == targetId &&
           isValidTarget(incoming()) && (
             // Whitelist keys that a target can update (ipInfo, deviceInfo included)
-            incoming().diff(existing()).affectedKeys().hasOnly(['lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel', 'platform', 'ipInfo', 'deviceInfo', 'lastPing'])
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel', 'platform', 'ipInfo', 'deviceInfo', 'lastPing'])
           )
         )
       ));
