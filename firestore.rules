@@ -14,7 +14,8 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && (
+      return isSignedIn() && 
+             request.auth.token.email_verified == true && (
         request.auth.token.email == "sendeqbuild@gmail.com" ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
@@ -36,17 +37,19 @@ service cloud.firestore {
     // TARGETS COLLECTION
     // ---------------------------------------------------------
     function isValidTarget(data) {
-      let requiredFields = ['name', 'lat', 'lng', 'accuracy', 'lastSeen', 'status'];
+      let requiredFields = ['name', 'lastSeen', 'status'];
       return data.keys().hasAll(requiredFields) &&
              data.name is string && data.name.size() <= 100 &&
-             data.lat is number &&
-             data.lng is number &&
-             data.accuracy is number &&
              data.lastSeen is string &&
              data.status in ['active', 'offline', 'warning'] &&
+             (!data.keys().hasAll(['lat']) || data.lat is number) &&
+             (!data.keys().hasAll(['lng']) || data.lng is number) &&
+             (!data.keys().hasAll(['accuracy']) || data.accuracy is number) &&
              (!data.keys().hasAll(['platform']) || data.platform is string) &&
              (!data.keys().hasAll(['history']) || data.history is list) &&
-             (!data.keys().hasAll(['intel']) || data.intel is list);
+             (!data.keys().hasAll(['intel']) || data.intel is list) &&
+             (!data.keys().hasAll(['ipInfo']) || data.ipInfo is map) &&
+             (!data.keys().hasAll(['deviceInfo']) || data.deviceInfo is map);
     }
 
     match /targets/{targetId} {
@@ -59,8 +62,8 @@ service cloud.firestore {
         isAdmin() ||
         (
           isValidTarget(incoming()) && (
-            // Added platform and history to the allowed update keys
-            incoming().diff(existing()).affectedKeys().hasOnly(['lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel', 'platform'])
+            // Added ipInfo and deviceInfo to the allowed update keys
+            incoming().diff(existing()).affectedKeys().hasOnly(['lat', 'lng', 'accuracy', 'lastSeen', 'status', 'history', 'intel', 'platform', 'ipInfo', 'deviceInfo'])
           )
         )
       ));
