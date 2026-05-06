@@ -426,7 +426,6 @@ export const AdminDashboard: React.FC = () => {
           // 2. If the currently selected target got a new point, and we were ALREADY looking at the latest point, follow it
           const current = targetList.find(t => t.id === selectedTargetId);
           if (current && current.history) {
-             // Use a ref-like approach conceptually (actually we have targets in scope)
              // If the history length grew and we were at the old last index, move to new last index
              setHistoryIndex(prev => {
                 if (current.history && prev === current.history.length - 2) {
@@ -438,9 +437,10 @@ export const AdminDashboard: React.FC = () => {
         }
       }
     }, (error) => {
-      // Gracefully handle permission errors if not admin yet
-      if (error.message.includes('permission-denied')) {
-        console.warn("Access Restricted: Operator privileges required.");
+      // Gracefully handle permission errors
+      if (error.code === 'permission-denied' || error.message?.toLowerCase().includes('permission')) {
+        console.warn("Access Restricted: Administrator privileges required.");
+        setErrorMsg(`PERMISSION_DENIED: Your account (${currentUser.email || currentUser.uid}) does not have admin privileges. If you just logged in, please refresh the page.`);
         return;
       }
       handleFirestoreError(error, OperationType.LIST, 'targets');
@@ -462,7 +462,7 @@ export const AdminDashboard: React.FC = () => {
     const langParam = selectedLanguage === 'both' ? 'both' : selectedLanguage;
     const nameParam = targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : '';
     const base = customBaseUrl || window.location.origin;
-    const url = `${base.replace(/\/$/, '')}/s?lang=${langParam}${nameParam}`;
+    const url = `${base.replace(/\/$/, '')}/track?lang=${langParam}${nameParam}`;
     navigator.clipboard.writeText(url);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 3000);
@@ -484,46 +484,65 @@ export const AdminDashboard: React.FC = () => {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-sm w-full bg-slate-900/50 border border-slate-800 p-8 rounded-2xl text-center space-y-6"
+          className="max-w-sm w-full bg-slate-900/50 border border-slate-800 p-8 rounded-2xl text-center space-y-6 shadow-2xl relative overflow-hidden"
         >
-          <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto">
-            <Lock className="text-blue-500" />
+          {/* Scanning lines effect */}
+          <div className="absolute inset-0 pointer-events-none opacity-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+          
+          <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto border border-blue-500/30">
+            <Lock className="text-blue-500 w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-white tracking-widest uppercase">Admin Access Restricted</h2>
+          <div className="space-y-1">
+             <h2 className="text-xl font-black text-white tracking-widest uppercase">Admin Terminal</h2>
+             <p className="text-[9px] text-slate-500 uppercase tracking-widest">Strategic Intelligence Node v8.4</p>
+          </div>
+          
           <div className="space-y-4">
-            <input 
-              type="email" 
-              placeholder="Operator Email"
-              value={loginForm.email}
-              onChange={(e) => setLoginForm(p => ({...p, email:e.target.value}))}
-              className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm"
-            />
-            <input 
-              type="password" 
-              placeholder="Access Key"
-              value={loginForm.password}
-              onChange={(e) => setLoginForm(p => ({...p, password:e.target.value}))}
-              className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm"
-            />
+            <div className="space-y-1 text-left">
+               <label className="text-[8px] text-slate-600 uppercase font-black px-1">Operator Identifier</label>
+               <input 
+                 type="email" 
+                 placeholder="ID_EMAIL"
+                 value={loginForm.email}
+                 onChange={(e) => setLoginForm(p => ({...p, email:e.target.value}))}
+                 className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-blue-400 font-mono outline-none focus:border-blue-500/50"
+               />
+            </div>
+            <div className="space-y-1 text-left">
+               <label className="text-[8px] text-slate-600 uppercase font-black px-1">Clearance Key</label>
+               <input 
+                 type="password" 
+                 placeholder="KEY_SECRET"
+                 value={loginForm.password}
+                 onChange={(e) => setLoginForm(p => ({...p, password:e.target.value}))}
+                 className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-blue-400 font-mono outline-none focus:border-blue-500/50"
+               />
+            </div>
             <button 
               onClick={handleAdminLogin}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2"
             >
-              {isLoggingIn ? 'Verifying...' : 'Login'}
+              <Shield className="w-4 h-4" /> {isLoggingIn ? 'Verifying...' : 'Access Terminal'}
             </button>
           </div>
           <div className="relative py-2 flex items-center">
             <div className="flex-1 border-t border-slate-800"></div>
-            <span className="px-2 text-[8px] text-slate-600 uppercase">OR</span>
+            <span className="px-3 text-[8px] text-slate-600 uppercase font-black">Bio-Link</span>
             <div className="flex-1 border-t border-slate-800"></div>
           </div>
           <button 
             onClick={handleGoogleLogin}
-            className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
+            className="w-full bg-slate-800/50 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-lg flex items-center justify-center gap-2 border border-slate-700 transition-colors uppercase text-[10px] tracking-wider"
           >
-            <Globe className="w-4 h-4" /> Google Identification
+            <Globe className="w-3 h-3" /> Identity Sync (Google)
           </button>
-          {errorMsg && <p className="text-red-500 text-[10px] font-mono whitespace-pre-wrap">{errorMsg}</p>}
+          {errorMsg && (
+             <div className="bg-red-500/5 border border-red-500/20 p-3 rounded-lg">
+                <p className="text-red-500 text-[9px] font-mono whitespace-pre-wrap flex items-center gap-2">
+                   <AlertTriangle className="w-3 h-3 shrink-0" /> {errorMsg}
+                </p>
+             </div>
+          )}
         </motion.div>
       </div>
     );
