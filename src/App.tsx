@@ -36,8 +36,8 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const hasTrackingParams = params.has('l') || params.has('lang') || params.has('id') || params.has('n');
     
-    // Explicit Admin Route - Only show AdminDashboard if the path is exactly /admin AND no tracking params are present
-    if ((path === '/admin' || path.startsWith('/admin/')) && !hasTrackingParams) {
+    // Explicit Admin Route
+    if (path === '/admin' || path.startsWith('/admin/')) {
       return <AdminDashboard />;
     }
     
