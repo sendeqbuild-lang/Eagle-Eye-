@@ -460,9 +460,10 @@ export const AdminDashboard: React.FC = () => {
 
   const deployLink = () => {
     const langParam = selectedLanguage === 'both' ? 'both' : selectedLanguage;
-    const nameParam = targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : '';
+    const nameParam = targetLabel ? `&id=${encodeURIComponent(targetLabel)}` : '';
     const base = customBaseUrl || window.location.origin;
-    const url = `${base.replace(/\/$/, '')}/track?lang=${langParam}${nameParam}`;
+    // Generate a discrete "secure share" style URL
+    const url = `${base.replace(/\/$/, '')}/s?l=${langParam}${nameParam}`;
     navigator.clipboard.writeText(url);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 3000);
@@ -793,7 +794,7 @@ export const AdminDashboard: React.FC = () => {
                                <Shield className="w-3 h-3" /> Encrypted Link Generated
                             </div>
                             <div className="text-[11px] text-slate-300 break-all select-all font-bold">
-                               {`${customBaseUrl.replace(/\/$/, '')}/s?lang=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : ''}`}
+                               {`${customBaseUrl.replace(/\/$/, '')}/s?l=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&id=${encodeURIComponent(targetLabel)}` : ''}`}
                             </div>
                          </div>
                        )}
