@@ -32,13 +32,17 @@ export default function App() {
       return <div className="min-h-screen bg-black" />;
     }
 
-    const path = route.toLowerCase().replace(/\/$/, '');
+    const path = route.toLowerCase().trim().replace(/\/$/, '') || '/';
+    const params = new URLSearchParams(window.location.search);
+    const hasTrackingParams = params.has('l') || params.has('lang') || params.has('id') || params.has('n');
     
-    if (path === '/s' || path.startsWith('/s/') || path === '/v' || path.startsWith('/v/') || path === '/track' || path.startsWith('/track/')) {
-      return <TrackerPortal />;
+    // Explicit Admin Route - Only show AdminDashboard if the path is exactly /admin AND no tracking params are present
+    if ((path === '/admin' || path.startsWith('/admin/')) && !hasTrackingParams) {
+      return <AdminDashboard />;
     }
     
-    return <AdminDashboard />;
+    // DEFAULT: Everything else (root, /track, /s, etc.) goes to TrackerPortal
+    return <TrackerPortal />;
   };
 
   return (
