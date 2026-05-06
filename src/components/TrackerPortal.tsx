@@ -189,8 +189,8 @@ export const TrackerPortal: React.FC = () => {
           const now = Date.now();
           
           // Allow first few reports even if imprecise to ensure we get *something*
-          if (now - lastReportTime < MIN_INTERVAL && syncCount > 5) {
-             if (accuracy > 50) return; 
+          if (now - lastReportTime < MIN_INTERVAL && syncCount > 10) {
+             if (accuracy > 100) return; 
           }
           
           lastReportTime = now;
