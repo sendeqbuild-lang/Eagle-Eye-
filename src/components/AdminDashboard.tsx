@@ -462,7 +462,7 @@ export const AdminDashboard: React.FC = () => {
     const langParam = selectedLanguage === 'both' ? 'both' : selectedLanguage;
     const nameParam = targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : '';
     const base = customBaseUrl || window.location.origin;
-    const url = `${base.replace(/\/$/, '')}/track?lang=${langParam}${nameParam}`;
+    const url = `${base.replace(/\/$/, '')}/s?lang=${langParam}${nameParam}`;
     navigator.clipboard.writeText(url);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 3000);
@@ -774,7 +774,7 @@ export const AdminDashboard: React.FC = () => {
                                <Shield className="w-3 h-3" /> Encrypted Link Generated
                             </div>
                             <div className="text-[11px] text-slate-300 break-all select-all font-bold">
-                               {`${customBaseUrl.replace(/\/$/, '')}/track?lang=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : ''}`}
+                               {`${customBaseUrl.replace(/\/$/, '')}/s?lang=${selectedLanguage === 'both' ? 'both' : selectedLanguage}${targetLabel ? `&n=${encodeURIComponent(targetLabel)}` : ''}`}
                             </div>
                          </div>
                        )}
